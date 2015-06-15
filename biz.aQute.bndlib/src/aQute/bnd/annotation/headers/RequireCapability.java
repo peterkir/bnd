@@ -1,9 +1,46 @@
 package aQute.bnd.annotation.headers;
 
-import java.lang.annotation.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
+ * <p>
  * The Bundle’s Require-Capability header
+ * </p>
+ * <p>
+ * Typically used as a meta-annotation, i.e. an annotation placed on another
+ * annotation, which we will call the <em>user-defined annotation</em>. When the
+ * user-defined annotation is found on a class within the bundle, an entry in
+ * the <code>Require-Capability</code> header is added. The filter expression of
+ * the requirement may be parameterised with values from the user-defined
+ * annotation. For example, given the following declarations:
+ * </p>
+ * 
+ * <pre>
+ * &#64;RequireCapability(
+ *         ns = "com.acme.engine",
+ *         effective = "active",
+ *         filter = "(com.acme.engine=${type})")
+ * public @interface Engine {
+ *     String type();
+ * }
+ * 
+ * &#64;Engine(type = "wankel")
+ * public class Vehicle { ... }
+ * </pre>
+ * <p>
+ * ... the following header will be generated in MANIFEST.MF:
+ * </p>
+ * 
+ * <pre>
+ * Require-Capability:\
+ *     com.acme.engine; \
+ *         effective:=active; \
+ *         filter:="(com.acme.engine=wankel)",\
+ *     ...
+ * </pre>
  * 
  * {@link About}
  */
@@ -12,7 +49,10 @@ import java.lang.annotation.*;
 		ElementType.ANNOTATION_TYPE, ElementType.TYPE
 })
 public @interface RequireCapability {
+
 	String value() default "";
+
+	String extra() default "";
 
 	/**
 	 * The capability namespace. For example: {@code osgi.contract}.
@@ -39,7 +79,7 @@ public @interface RequireCapability {
 	 * correctly. A filter is optional, if no filter directive is specified the
 	 * Requirement always matches.
 	 */
-	String filter();
+	String filter() default "";
 
 	/**
 	 * A mandatory Requirement forbids the bundle to resolve when the

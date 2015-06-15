@@ -1136,7 +1136,7 @@ public class Builder extends Analyzer {
 			if (absentIsOk)
 				return;
 
-			error("Can not find JAR file " + source);
+			error("Can not find JAR file '" + source + "'");
 		} else {
 			addAll(jar, sub, instr, destination);
 		}
@@ -1391,30 +1391,7 @@ public class Builder extends Analyzer {
 	}
 
 	public String _permissions(String args[]) {
-		StringBuilder sb = new StringBuilder();
-
-		for (String arg : args) {
-			if ("packages".equals(arg) || "all".equals(arg)) {
-				for (PackageRef imp : getImports().keySet()) {
-					if (!imp.isJava()) {
-						sb.append("(org.osgi.framework.PackagePermission \"");
-						sb.append(imp);
-						sb.append("\" \"import\")\r\n");
-					}
-				}
-				for (PackageRef exp : getExports().keySet()) {
-					sb.append("(org.osgi.framework.PackagePermission \"");
-					sb.append(exp);
-					sb.append("\" \"export\")\r\n");
-				}
-			} else if ("admin".equals(arg) || "all".equals(arg)) {
-				sb.append("(org.osgi.framework.AdminPermission)");
-			} else if ("permissions".equals(arg))
-				;
-			else
-				error("Invalid option in ${permissions}: %s", arg);
-		}
-		return sb.toString();
+		return new PermissionGenerator(this, args).generate();
 	}
 
 	/**

@@ -1,14 +1,23 @@
 package aQute.bnd.xmlattribute;
 
-import java.util.*;
+import java.lang.reflect.Array;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import aQute.bnd.annotation.xml.*;
-import aQute.bnd.osgi.*;
-import aQute.lib.tag.*;
+import aQute.bnd.annotation.xml.XMLAttribute;
+import aQute.bnd.osgi.Annotation;
+import aQute.lib.tag.Tag;
 
 public class ExtensionDef {
 
+	protected final XMLAttributeFinder				finder;
+
 	protected final Map<XMLAttribute,Annotation>	attributes	= new LinkedHashMap<XMLAttribute,Annotation>();
+
+	public ExtensionDef(XMLAttributeFinder finder) {
+		this.finder = finder;
+	}
 
 	public void addExtensionAttribute(XMLAttribute xmlAttr, Annotation a) {
 		attributes.put(xmlAttr, a);
@@ -49,12 +58,30 @@ public class ExtensionDef {
 		if (namespaces != null) {
 			for (Map.Entry<XMLAttribute,Annotation> entry : attributes.entrySet()) {
 				String prefix = namespaces.getPrefix(entry.getKey().namespace());
+				Annotation a = entry.getValue();
+				Map<String,String> props = finder.getDefaults(a);
 				for (String key : entry.getValue().keySet()) {
-					String value = String.valueOf(entry.getValue().get(key));
-					tag.addAttribute(prefix + ":" + key, value);
+					Object obj = entry.getValue().get(key);
+					String value;
+					if (obj.getClass().isArray()) {
+						StringBuilder sb = new StringBuilder();
+						String sep = "";
+						for (int i = 0; i < Array.getLength(obj); i++) {
+							Object el = Array.get(obj, i);
+							sb.append(sep).append(String.valueOf(el));
+							sep = " ";
+						}
+						value = sb.toString();
+					} else {
+						value = String.valueOf(obj);
+					}
+					props.put(key, value);
 				}
+				for (Map.Entry<String,String> prop : props.entrySet())
+					tag.addAttribute(prefix + ":" + prop.getKey(), prop.getValue());
 			}
 		}
 	}
+
 
 }

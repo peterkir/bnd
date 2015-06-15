@@ -1,40 +1,68 @@
 package aQute.jpm.lib;
 
-import static aQute.lib.io.IO.*;
+import static aQute.lib.io.IO.copy;
+import static aQute.lib.io.IO.createTempFile;
+import static aQute.lib.io.IO.rename;
 
-import java.io.*;
-import java.lang.reflect.*;
-import java.net.*;
-import java.security.*;
-import java.text.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.jar.*;
-import java.util.regex.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.net.URI;
+import java.net.URL;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.EnumSet;
+import java.util.Enumeration;
+import java.util.Formatter;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import aQute.bnd.header.*;
-import aQute.bnd.osgi.*;
-import aQute.bnd.version.*;
-import aQute.jpm.facade.repo.*;
-import aQute.jpm.platform.*;
-import aQute.jsonrpc.proxy.*;
-import aQute.lib.base64.*;
-import aQute.lib.collections.*;
-import aQute.lib.converter.*;
-import aQute.lib.hex.*;
-import aQute.lib.io.*;
-import aQute.lib.json.*;
-import aQute.lib.justif.*;
-import aQute.lib.settings.*;
-import aQute.lib.strings.*;
-import aQute.libg.cryptography.*;
-import aQute.rest.urlclient.*;
-import aQute.service.library.*;
+import aQute.bnd.header.Attrs;
+import aQute.bnd.header.OSGiHeader;
+import aQute.bnd.header.Parameters;
+import aQute.bnd.osgi.Constants;
+import aQute.bnd.version.Version;
+import aQute.jpm.facade.repo.JpmRepo;
+import aQute.jpm.platform.Platform;
+import aQute.jsonrpc.proxy.JSONRPCProxy;
+import aQute.lib.base64.Base64;
+import aQute.lib.collections.ExtList;
+import aQute.lib.converter.Converter;
+import aQute.lib.hex.Hex;
+import aQute.lib.io.IO;
+import aQute.lib.json.JSONCodec;
+import aQute.lib.justif.Justif;
+import aQute.lib.settings.Settings;
+import aQute.lib.strings.Strings;
+import aQute.libg.cryptography.SHA1;
+import aQute.rest.urlclient.URLClient;
+import aQute.service.library.Coordinate;
+import aQute.service.library.Library;
 import aQute.service.library.Library.Program;
 import aQute.service.library.Library.Revision;
 import aQute.service.library.Library.RevisionRef;
-import aQute.service.reporter.*;
-import aQute.struct.*;
+import aQute.service.reporter.Reporter;
+import aQute.struct.struct;
 
 /**
  * JPM is the Java package manager. It manages a local repository in the user
@@ -459,7 +487,11 @@ public class JustAnotherPackageManager {
 	 * @throws Exception
 	 * @throws IOException
 	 */
-	public String createService(ServiceData data) throws Exception, IOException {
+	public String createService(ServiceData data, boolean force) throws Exception, IOException {
+
+		if (data.main == null) {
+			return "No main is set";
+		}
 
 		File sdir = new File(serviceDir, data.name);
 		if (!sdir.exists() && !sdir.mkdirs()) {
@@ -495,7 +527,7 @@ public class JustAnotherPackageManager {
 
 		platform.chown(data.user, true, new File(data.sdir));
 
-		String s = platform.createService(data, null, false);
+		String s = platform.createService(data, null, force);
 		if (s == null)
 			storeData(new File(data.sdir, "data"), data);
 		return s;
@@ -910,6 +942,20 @@ public class JustAnotherPackageManager {
 			}
 			catch (Exception e) {
 				reporter.trace("hmm, not a valid url %s, will try the server", arg);
+				return null;
+			}
+
+		File f = IO.getFile(arg);
+
+		if (f.isFile())
+			try {
+				ArtifactData data = putAsync(f.toURI());
+				data.local = true;
+				return data;
+			}
+			catch (Exception e) {
+				reporter.trace("hmm, not a valid file %s, will try the server", arg);
+				return null;
 			}
 
 		Coordinate c = new Coordinate(arg);
@@ -1171,7 +1217,7 @@ public class JustAnotherPackageManager {
 		if (memo.current instanceof ServiceData) {
 			Service service = getService((ServiceData) memo.current);
 			service.remove();
-			createService((ServiceData) memo.current);
+			createService((ServiceData) memo.current, true);
 			IO.delete(new File(IO.getFile(serviceDir, memo.current.name), "data"));
 			storeData(new File(IO.getFile(serviceDir, memo.current.name), "data"), memo.current);
 		} else {

@@ -1,13 +1,30 @@
 package aQute.bnd.component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
-import aQute.bnd.header.*;
-import aQute.bnd.osgi.*;
-import aQute.bnd.service.*;
-import aQute.bnd.version.*;
-import aQute.bnd.xmlattribute.*;
-import aQute.lib.strings.*;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+
+import aQute.bnd.header.Attrs;
+import aQute.bnd.header.OSGiHeader;
+import aQute.bnd.header.Parameters;
+import aQute.bnd.osgi.Analyzer;
+import aQute.bnd.osgi.Clazz;
+import aQute.bnd.osgi.Constants;
+import aQute.bnd.osgi.Descriptors;
+import aQute.bnd.osgi.Instruction;
+import aQute.bnd.osgi.Instructions;
+import aQute.bnd.osgi.Processor;
+import aQute.bnd.service.AnalyzerPlugin;
+import aQute.bnd.version.Version;
+import aQute.bnd.xmlattribute.XMLAttributeFinder;
+import aQute.lib.strings.Strings;
 
 /**
  * Analyze the class space for any classes that have an OSGi annotation for DS.
@@ -52,7 +69,7 @@ public class DSAnnotations implements AnalyzerPlugin {
 		TreeSet<String> requires = new TreeSet<String>();
 		Version maxVersion = AnnotationReader.V1_0;
 
-		XMLAttributeFinder finder = new XMLAttributeFinder();
+		XMLAttributeFinder finder = new XMLAttributeFinder(analyzer);
 		for (Clazz c : list) {
 			for (Instruction instruction : instructions.keySet()) {
 
@@ -80,10 +97,13 @@ public class DSAnnotations implements AnalyzerPlugin {
 							Arrays.sort(objectClass);
 							addServiceCapability(objectClass, provides);
 						}
+
+						MergedRequirement serviceReqMerge = new MergedRequirement("osgi.service");
 						for (ReferenceDef ref : definition.references.values()) {
-							String objectClass = ref.service;
-							addServiceRequirement(objectClass, requires);
+							addServiceRequirement(ref, serviceReqMerge);
 						}
+						requires.addAll(serviceReqMerge.toStringList());
+
 						maxVersion = ComponentDef.max(maxVersion, definition.version);
 					}
 				}
@@ -118,14 +138,15 @@ public class DSAnnotations implements AnalyzerPlugin {
 		}
 	}
 
-	private void addServiceRequirement(String objectClass, Set<String> requires) {
-		Parameters p = new Parameters();
-		Attrs a = new Attrs();
-		a.put(Constants.FILTER_DIRECTIVE, "\"(objectClass=" + objectClass + ")\"");
-		a.put(Constants.EFFECTIVE_DIRECTIVE, "\"active\"");
-		p.put("osgi.service", a);
-		String s = p.toString();
-		requires.add(s);
+	private void addServiceRequirement(ReferenceDef ref, MergedRequirement requires) {
+		String objectClass = ref.service;
+		ReferenceCardinality cardinality = ref.cardinality;
+		boolean optional = cardinality == ReferenceCardinality.OPTIONAL || cardinality == ReferenceCardinality.MULTIPLE;
+		boolean multiple = cardinality == ReferenceCardinality.MULTIPLE
+				|| cardinality == ReferenceCardinality.AT_LEAST_ONE;
+
+		String filter = "(objectClass=" + objectClass + ")";
+		requires.put(filter, "active", optional, multiple);
 	}
 
 	private void addExtenderRequirement(Set<String> requires, Version version) {
