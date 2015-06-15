@@ -16,7 +16,7 @@ public class TagResource extends WriteResource {
 	public void write(OutputStream out) throws UnsupportedEncodingException {
 		OutputStreamWriter ow = new OutputStreamWriter(out, "UTF-8");
 		PrintWriter pw = new PrintWriter(ow);
-		pw.print("<?xml version=\"1.0\"?>" + "\n");
+		pw.println("<?xml version=\"1.0\"?>");
 		try {
 			tag.print(0, pw);
 		}
