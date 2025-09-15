@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import aQute.bnd.http.HttpClient;
 import aQute.bnd.http.HttpRequestException;
+import aQute.bnd.repository.maven.provider.MavenBndRepository;
 import aQute.bnd.service.url.TaggedData;
 import aQute.lib.io.IO;
 import aQute.maven.api.Archive;
@@ -47,10 +48,8 @@ class Releaser implements Release {
 	private String						deploymentId;
 	private final static Logger			logger					= LoggerFactory.getLogger(Releaser.class);
 
-	private static final String			CENTRAL_PORTAL_API_BASE	= "https://central.sonatype.com/api/v1/publisher";
-	private static final String			UPLOAD_ENDPOINT			= "/upload";
-	private static final String			DEPLOYMENT_ENDPOINT		= "/deployments";
-	private static final String			STATUS_ENDPOINT			= "/status";
+	private static final String			UPLOAD_ENDPOINT	= "/upload";
+	private static final String			STATUS_ENDPOINT	= "/status";
 
 	Releaser(MavenRepository home, Revision revision, MavenBackingRepository repo, Properties context)
 		throws Exception {
@@ -290,7 +289,7 @@ class Releaser implements Release {
 
 	private void uploadToPortal(File deploymentBundle) throws Exception {
 		logger.info("Uploading deployment bundle to Sonatype Central Portal...");
-		String uploadUrl = CENTRAL_PORTAL_API_BASE + UPLOAD_ENDPOINT;
+		String uploadUrl = MavenBndRepository.CENTRAL_SONATYPE_PUBLISHER_URL + UPLOAD_ENDPOINT;
 
 		try {
 			String boundary = "----WebKitFormBoundary" + System.currentTimeMillis();
@@ -374,7 +373,7 @@ class Releaser implements Release {
 			return;
 		}
 
-		String statusUrl = CENTRAL_PORTAL_API_BASE + STATUS_ENDPOINT + "?id=" + deploymentId;
+		String statusUrl = MavenBndRepository.CENTRAL_SONATYPE_PUBLISHER_URL + STATUS_ENDPOINT + "?id=" + deploymentId;
 
 		try {
 			var taggedData = client.build()

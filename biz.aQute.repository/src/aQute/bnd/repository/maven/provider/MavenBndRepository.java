@@ -102,10 +102,15 @@ import aQute.service.reporter.Reporter;
 @BndPlugin(name = "MavenBndRepository", parameters = Configuration.class)
 public class MavenBndRepository extends BaseRepository implements RepositoryPlugin, RegistryPlugin, Plugin, Closeable,
 	Refreshable, Actionable, ToDependencyPom, ReleaseBracketingPlugin {
-	final static Pattern						PREPROCESS_P		= Pattern.compile("\\{\\s*(?<core>[^}]+)\\s*\\}");
 
-	private final static Logger					logger				= LoggerFactory.getLogger(MavenBndRepository.class);
-	private static final int					DEFAULT_POLL_TIME	= 5;
+	public static final String					CENTRAL_SONATYPE_PUBLISHER_URL	= "https://central.sonatype.com/api/v1/publisher";
+
+	final static Pattern						PREPROCESS_P					= Pattern
+		.compile("\\{\\s*(?<core>[^}]+)\\s*\\}");
+
+	private final static Logger					logger							= LoggerFactory
+		.getLogger(MavenBndRepository.class);
+	private static final int					DEFAULT_POLL_TIME				= 5;
 
 	private static final String					NONE				= "NONE";
 	private static final String					MAVEN_REPO_LOCAL	= System.getProperty("maven.repo.local",
@@ -720,7 +725,7 @@ public class MavenBndRepository extends BaseRepository implements RepositoryPlug
 	private boolean isSonatypeCentralPortal(String releaseUrl) {
 		if (releaseUrl == null)
 			return false;
-		return releaseUrl.contains("central.sonatype.com/api/v1/publisher/upload/");
+		return releaseUrl.contains(CENTRAL_SONATYPE_PUBLISHER_URL);
 	}
 
 	private void validateUris(List<MavenBackingRepository> release, Formatter f) {
