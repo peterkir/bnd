@@ -342,12 +342,12 @@ class P2Indexer implements Closeable {
 		// Get unique resources
 		Set<Resource> allResources = aQute.bnd.osgi.resource.ResourceUtils.getResources(allCaps);
 		
-		// Filter resources with type=eclipse.feature in identity capability
+		// Filter resources with type=org.eclipse.update.feature in identity capability
 		for (Resource resource : allResources) {
 			List<Capability> identities = resource.getCapabilities(IdentityNamespace.IDENTITY_NAMESPACE);
 			for (Capability identity : identities) {
 				Object type = identity.getAttributes().get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
-				if ("eclipse.feature".equals(type)) {
+				if ("org.eclipse.update.feature".equals(type)) {
 					// Extract the feature from the resource
 					Feature feature = extractFeatureFromResource(resource);
 					if (feature != null) {
@@ -400,7 +400,7 @@ class P2Indexer implements Closeable {
 				Object idAttr = identity.getAttributes().get(IdentityNamespace.IDENTITY_NAMESPACE);
 				Object versionAttr = identity.getAttributes().get(IdentityNamespace.CAPABILITY_VERSION_ATTRIBUTE);
 				
-				if ("eclipse.feature".equals(type) && 
+				if ("org.eclipse.update.feature".equals(type) && 
 					id.equals(idAttr) && 
 					requestedVersion.equals(versionAttr)) {
 					return extractFeatureFromResource(resource);

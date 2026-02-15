@@ -101,6 +101,7 @@ import aQute.bnd.http.HttpClient;
 import aQute.bnd.osgi.resource.FilterParser.PackageExpression;
 import aQute.bnd.osgi.resource.ResourceUtils;
 import aQute.bnd.service.Actionable;
+import aQute.bnd.service.FeatureProvider;
 import aQute.bnd.service.Refreshable;
 import aQute.bnd.service.Registry;
 import aQute.bnd.service.RemoteRepositoryPlugin;
@@ -108,12 +109,15 @@ import aQute.bnd.service.RepositoryPlugin;
 import aQute.bnd.service.clipboard.Clipboard;
 import aQute.lib.converter.Converter;
 import aQute.lib.io.IO;
+import aQute.p2.provider.Feature;
 import bndtools.Plugin;
 import bndtools.central.Central;
 import bndtools.central.RepositoriesViewRefresher;
 import bndtools.central.RepositoryUtils;
 import bndtools.dnd.gav.GAVIPageListener;
 import bndtools.editor.common.HelpButtons;
+import bndtools.model.repo.IncludedBundleItem;
+import bndtools.model.repo.IncludedFeatureItem;
 import bndtools.model.repo.RepositoryBundle;
 import bndtools.model.repo.RepositoryBundleVersion;
 import bndtools.model.repo.RepositoryEntry;
@@ -412,7 +416,89 @@ public class RepositoriesView extends ViewPart implements RepositoriesViewRefres
 				.isEmpty()) {
 				IStructuredSelection selection = (IStructuredSelection) event.getSelection();
 				final Object element = selection.getFirstElement();
-				if (element instanceof IAdaptable) {
+				if (element instanceof IncludedFeatureItem) {
+					// Handle IncludedFeatureItem by resolving the feature and opening its JAR
+					IncludedFeatureItem featureItem = (IncludedFeatureItem) element;
+					RepositoryPlugin repo = featureItem.getParent()
+						.getParent()
+						.getRepo();
+					Feature.Includes includes = featureItem.getIncludes();
+					String featureId = includes.id;
+					try {
+						if (repo instanceof FeatureProvider) {
+							Object featureObj = ((FeatureProvider) repo).getFeature(includes.id, includes.version);
+							if (featureObj instanceof Feature) {
+								Feature feature = (Feature) featureObj;
+								// Try to get the feature JAR file
+								RepositoryBundle featureBundle = new RepositoryBundle(repo, feature.getId());
+								File featureFile = featureBundle.getFile(false);
+								if (featureFile != null && featureFile.exists()) {
+									openURI(featureFile.toURI());
+								} else {
+									boolean download = MessageDialog.openQuestion(getSite().getShell(), "Repositories",
+										"The feature '" + featureId + "' has not been downloaded. Download and open it now?");
+									if (download) {
+										Job downloadJob = new Job("Downloading feature " + featureId) {
+											@Override
+											protected IStatus run(IProgressMonitor monitor) {
+												final File repoFile = featureBundle.getFile(true);
+												if (repoFile != null && repoFile.exists()) {
+													getSite().getShell()
+														.getDisplay()
+														.asyncExec(() -> openURI(repoFile.toURI()));
+												}
+												return Status.OK_STATUS;
+											}
+										};
+										downloadJob.setUser(true);
+										downloadJob.schedule();
+									}
+								}
+							}
+						}
+					} catch (Exception e) {
+						logger.logError("Error opening feature " + featureId, e);
+						MessageDialog.openError(getSite().getShell(), "Error",
+							"Failed to open feature: " + e.getMessage());
+					}
+				} else if (element instanceof IncludedBundleItem) {
+					// Handle IncludedBundleItem by resolving the bundle and opening it
+					IncludedBundleItem bundleItem = (IncludedBundleItem) element;
+					RepositoryPlugin repo = bundleItem.getParent()
+						.getParent()
+						.getRepo();
+					String bundleId = bundleItem.getPlugin().id;
+					try {
+						RepositoryBundle bundle = new RepositoryBundle(repo, bundleId);
+						File bundleFile = bundle.getFile(false);
+						if (bundleFile != null && bundleFile.exists()) {
+							openURI(bundleFile.toURI());
+						} else {
+							boolean download = MessageDialog.openQuestion(getSite().getShell(), "Repositories",
+								"The bundle '" + bundleId + "' has not been downloaded. Download and open it now?");
+							if (download) {
+								Job downloadJob = new Job("Downloading bundle " + bundleId) {
+									@Override
+									protected IStatus run(IProgressMonitor monitor) {
+										final File repoFile = bundle.getFile(true);
+										if (repoFile != null && repoFile.exists()) {
+											getSite().getShell()
+												.getDisplay()
+												.asyncExec(() -> openURI(repoFile.toURI()));
+										}
+										return Status.OK_STATUS;
+									}
+								};
+								downloadJob.setUser(true);
+								downloadJob.schedule();
+							}
+						}
+					} catch (Exception e) {
+						logger.logError("Error opening bundle " + bundleId, e);
+						MessageDialog.openError(getSite().getShell(), "Error",
+							"Failed to open bundle: " + e.getMessage());
+					}
+				} else if (element instanceof IAdaptable) {
 					final URI uri = ((IAdaptable) element).getAdapter(URI.class);
 					if (uri == null && element instanceof RepositoryEntry) {
 						boolean download = MessageDialog.openQuestion(getSite().getShell(), "Repositories",

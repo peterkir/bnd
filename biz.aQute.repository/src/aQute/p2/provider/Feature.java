@@ -23,7 +23,7 @@ import aQute.bnd.osgi.resource.ResourceBuilder;
 /**
  * Parser for Eclipse feature.xml files. This class parses Eclipse features and
  * creates OSGi Resource representations with capabilities and requirements in
- * the osgi.identity namespace with type=eclipse.feature.
+ * the osgi.identity namespace with type=org.eclipse.update.feature.
  */
 public class Feature extends XMLBase {
 
@@ -252,10 +252,10 @@ public class Feature extends XMLBase {
 	public Resource toResource() throws Exception {
 		ResourceBuilder rb = new ResourceBuilder();
 
-		// Create identity capability with type=eclipse.feature
+		// Create identity capability with type=org.eclipse.update.feature
 		CapReqBuilder identity = new CapReqBuilder(IdentityNamespace.IDENTITY_NAMESPACE);
 		identity.addAttribute(IdentityNamespace.IDENTITY_NAMESPACE, id);
-		identity.addAttribute(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE, "eclipse.feature");
+		identity.addAttribute(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE, "org.eclipse.update.feature");
 		if (version != null) {
 			try {
 				Version v = Version.parseVersion(version);
@@ -318,9 +318,9 @@ public class Feature extends XMLBase {
 		// Create requirements for included features
 		for (Includes include : includes) {
 			CapReqBuilder req = new CapReqBuilder("osgi.identity");
-			String filter = String.format("(&(osgi.identity=%s)(type=eclipse.feature))", include.id);
+			String filter = String.format("(&(osgi.identity=%s)(type=org.eclipse.update.feature))", include.id);
 			if (include.version != null && !include.version.equals("0.0.0")) {
-				filter = String.format("(&(osgi.identity=%s)(type=eclipse.feature)(version=%s))", include.id,
+				filter = String.format("(&(osgi.identity=%s)(type=org.eclipse.update.feature)(version=%s))", include.id,
 					include.version);
 			}
 			req.addDirective("filter", filter);
@@ -337,7 +337,7 @@ public class Feature extends XMLBase {
 				req.addDirective("filter", String.format("(osgi.identity=%s)", requirement.plugin));
 			} else if (requirement.feature != null) {
 				req.addDirective("filter",
-					String.format("(&(osgi.identity=%s)(type=eclipse.feature))", requirement.feature));
+					String.format("(&(osgi.identity=%s)(type=org.eclipse.update.feature))", requirement.feature));
 			}
 			rb.addRequirement(req);
 		}

@@ -69,7 +69,7 @@ public class P2IndexerExtractFeatureTest {
 				java.util.List<org.osgi.resource.Capability> identities = resource.getCapabilities(org.osgi.framework.namespace.IdentityNamespace.IDENTITY_NAMESPACE);
 				for (org.osgi.resource.Capability identity : identities) {
 					Object type = identity.getAttributes().get(org.osgi.framework.namespace.IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
-					if ("eclipse.feature".equals(type)) {
+					if ("org.eclipse.update.feature".equals(type)) {
 						featureCount++;
 						if (featureCount <= 3) {
 							System.out.println("Feature resource " + featureCount + ": " + identity.getAttributes().get(org.osgi.framework.namespace.IdentityNamespace.IDENTITY_NAMESPACE));

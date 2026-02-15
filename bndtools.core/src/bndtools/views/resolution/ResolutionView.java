@@ -95,11 +95,18 @@ import aQute.bnd.build.model.EE;
 import aQute.bnd.osgi.Clazz;
 import aQute.bnd.osgi.resource.CapReqBuilder;
 import aQute.bnd.osgi.resource.ResourceUtils;
+import aQute.bnd.service.FeatureProvider;
+import aQute.bnd.service.RepositoryPlugin;
 import aQute.bnd.unmodifiable.Sets;
 import aQute.lib.io.IO;
 import aQute.lib.strings.Strings;
+import aQute.p2.provider.Feature;
 import bndtools.Plugin;
 import bndtools.editor.common.HelpButtons;
+import bndtools.model.repo.IncludedBundleItem;
+import bndtools.model.repo.IncludedFeatureItem;
+import bndtools.model.repo.RepositoryBundle;
+import bndtools.model.repo.RepositoryFeature;
 import bndtools.model.repo.RepositoryResourceElement;
 import bndtools.model.resolution.CapReqMapContentProvider;
 import bndtools.model.resolution.CapabilityLabelProvider;
@@ -612,31 +619,88 @@ public class ResolutionView extends ViewPart implements ISelectionListener, IRes
 			Object element = iter.next();
 			CapReqLoader loader = null;
 
-			File file = SelectionUtils.adaptObject(element, File.class);
-			if (file != null) {
-				loader = getLoaderForFile(file);
-			} else {
-				IResource eresource = SelectionUtils.adaptObject(element, IResource.class);
-				if (eresource != null) {
-					IPath location = eresource.getLocation();
-					if (location != null) {
-						loader = getLoaderForFile(location.toFile());
+			// Check RepositoryFeature BEFORE trying to adapt to File, since
+			// features are synthetic entries without file backing
+			if (element instanceof RepositoryFeature) {
+				// For features, load all included bundles
+				RepositoryFeature feature = (RepositoryFeature) element;
+				try {
+					feature.getFeature().parse();
+					for (aQute.p2.provider.Feature.Plugin plugin : feature.getFeature().getPlugins()) {
+						RepositoryBundle bundle = new RepositoryBundle(feature.getRepo(), plugin.id);
+						Resource resource = bundle.getResource();
+						if (resource != null) {
+							result.add(new ResourceCapReqLoader(resource));
+						}
 					}
-				} else if (element instanceof Repository repo) {
-					ResourceUtils.getAllResources(repo)
-						.stream()
-						.filter(r -> {
-							try {
-								return ResourceUtils.getContentCapabilities(r) != null;
-							} catch (Exception e) {
-								return false;
+				} catch (Exception e) {
+					// Ignore parse errors
+				}
+			} else if (element instanceof IncludedFeatureItem) {
+				// For included feature items, load the referenced feature's bundles
+				IncludedFeatureItem featureItem = (IncludedFeatureItem) element;
+				RepositoryPlugin repo = featureItem.getParent().getParent().getRepo();
+				Feature.Includes includes = featureItem.getIncludes();
+				try {
+					if (repo instanceof FeatureProvider) {
+						Object featureObj = ((FeatureProvider) repo).getFeature(includes.id, includes.version);
+						if (featureObj instanceof Feature) {
+							Feature feature = (Feature) featureObj;
+							feature.parse();
+							for (Feature.Plugin plugin : feature.getPlugins()) {
+								RepositoryBundle bundle = new RepositoryBundle(repo, plugin.id);
+								Resource resource = bundle.getResource();
+								if (resource != null) {
+									result.add(new ResourceCapReqLoader(resource));
+								}
 							}
-						})
-						.map(ResourceCapReqLoader::new)
-						.forEach(result::add);
-				} else if (element instanceof RepositoryResourceElement) {
-					Resource resource = ((RepositoryResourceElement) element).getResource();
-					loader = new ResourceCapReqLoader(resource);
+						}
+					}
+				} catch (Exception e) {
+					// Ignore resolution errors
+				}
+			} else if (element instanceof IncludedBundleItem) {
+				// Check IncludedBundleItem early as well since it's also a synthetic entry
+				// For included bundle items, resolve the bundle from the parent feature's repository
+				IncludedBundleItem bundleItem = (IncludedBundleItem) element;
+				RepositoryPlugin repo = bundleItem.getParent().getParent().getRepo();
+				String bundleId = bundleItem.getPlugin().id;
+				try {
+					RepositoryBundle bundle = new RepositoryBundle(repo, bundleId);
+					Resource resource = bundle.getResource();
+					if (resource != null) {
+						loader = new ResourceCapReqLoader(resource);
+					}
+				} catch (Exception e) {
+					// Ignore resolution errors
+				}
+			} else {
+				File file = SelectionUtils.adaptObject(element, File.class);
+				if (file != null) {
+					loader = getLoaderForFile(file);
+				} else {
+					IResource eresource = SelectionUtils.adaptObject(element, IResource.class);
+					if (eresource != null) {
+						IPath location = eresource.getLocation();
+						if (location != null) {
+							loader = getLoaderForFile(location.toFile());
+						}
+					} else if (element instanceof Repository repo) {
+						ResourceUtils.getAllResources(repo)
+							.stream()
+							.filter(r -> {
+								try {
+									return ResourceUtils.getContentCapabilities(r) != null;
+								} catch (Exception e) {
+									return false;
+								}
+							})
+							.map(ResourceCapReqLoader::new)
+							.forEach(result::add);
+					} else if (element instanceof RepositoryResourceElement) {
+						Resource resource = ((RepositoryResourceElement) element).getResource();
+						loader = new ResourceCapReqLoader(resource);
+					}
 				}
 			}
 

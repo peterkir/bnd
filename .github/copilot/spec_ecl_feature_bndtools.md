@@ -74,7 +74,7 @@ Enhance the bndtools repository view to display Eclipse P2 features as synthetic
 
 #### P2Indexer Enhancement (P2Indexer.java)
 - [x] Implemented `getFeatures()` method to extract features from indexed resources
-  - Queries repository for all resources with `type=eclipse.feature` in identity capability
+  - Queries repository for all resources with `type=org.eclipse.update.feature` in identity capability
   - Downloads and parses feature JAR files to create Feature objects
   - Returns list of parsed features
 - [x] Implemented `getFeature(id, version)` method for single feature lookup
@@ -86,7 +86,7 @@ Enhance the bndtools repository view to display Eclipse P2 features as synthetic
   - Uses debug-level logging to avoid cluttering logs with expected failures
   - Skips non-JAR files and files without feature.xml
 - [x] Features are automatically indexed during P2 repository processing (via `processArtifact()` in P2Indexer)
-- [x] Feature resources include identity capability with `type=eclipse.feature`
+- [x] Feature resources include identity capability with `type=org.eclipse.update.feature`
 
 #### FeatureFolderNode Enhancement
 - [x] Added `feature.parse()` call to ensure feature data is loaded before displaying children

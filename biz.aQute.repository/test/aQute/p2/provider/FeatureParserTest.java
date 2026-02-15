@@ -128,8 +128,8 @@ public class FeatureParserTest {
 						Object type = identityCap.getAttributes()
 							.get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
 						softly.assertThat(type)
-							.as("Identity capability should have type=eclipse.feature")
-							.isEqualTo("eclipse.feature");
+							.as("Identity capability should have type=org.eclipse.update.feature")
+							.isEqualTo("org.eclipse.update.feature");
 
 						Object identity = identityCap.getAttributes()
 							.get(IdentityNamespace.IDENTITY_NAMESPACE);
@@ -286,7 +286,7 @@ public class FeatureParserTest {
 			Capability identityCap = identityCaps.get(0);
 			softly.assertThat(identityCap.getAttributes()
 				.get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE))
-				.isEqualTo("eclipse.feature");
+				.isEqualTo("org.eclipse.update.feature");
 			softly.assertThat(identityCap.getAttributes()
 				.get(IdentityNamespace.IDENTITY_NAMESPACE))
 				.isEqualTo("test.feature");

@@ -37,7 +37,7 @@ public class P2IndexerFeatureTest {
 	private static final String	ECF_P2_REPO	= "https://download.eclipse.org/rt/ecf/3.16.5/site.p2/3.16.5.v20250914-0333/";
 
 	/**
-	 * Test that the P2 indexer includes features with eclipse.feature type in
+	 * Test that the P2 indexer includes features with org.eclipse.update.feature type in
 	 * the index
 	 */
 	@Test
@@ -72,7 +72,7 @@ public class P2IndexerFeatureTest {
 				.as("Index should contain resources")
 				.isNotEmpty();
 
-			// Find resources with type=eclipse.feature
+			// Find resources with type=org.eclipse.update.feature
 			List<Resource> featureResources = allResources.stream()
 				.filter(r -> {
 					List<Capability> identityCaps = r.getCapabilities(IdentityNamespace.IDENTITY_NAMESPACE);
@@ -82,12 +82,12 @@ public class P2IndexerFeatureTest {
 					Object type = identityCaps.get(0)
 						.getAttributes()
 						.get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
-					return "eclipse.feature".equals(type);
+					return "org.eclipse.update.feature".equals(type);
 				})
 				.toList();
 
 			softly.assertThat(featureResources)
-				.as("Index should contain eclipse.feature resources")
+				.as("Index should contain org.eclipse.update.feature resources")
 				.isNotEmpty();
 
 			// Log what we found
@@ -120,8 +120,8 @@ public class P2IndexerFeatureTest {
 				Capability identityCap = identityCaps.get(0);
 				softly.assertThat(identityCap.getAttributes()
 					.get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE))
-					.as("Feature identity should have type=eclipse.feature")
-					.isEqualTo("eclipse.feature");
+					.as("Feature identity should have type=org.eclipse.update.feature")
+					.isEqualTo("org.eclipse.update.feature");
 
 				softly.assertThat(identityCap.getAttributes()
 					.get(IdentityNamespace.IDENTITY_NAMESPACE))

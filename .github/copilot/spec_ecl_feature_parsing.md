@@ -11,7 +11,7 @@ use the ecf p2 repo as testdata from repo url https://download.eclipse.org/rt/ec
 create a expected data for the index file
 
 for parsing of the eclipse feature use the capability / requirement model similar to the bundles parsed and stored
-create a new capability inside the namespace osgi.identity with the type eclipse.feature
+create a new capability inside the namespace osgi.identity with the type org.eclipse.update.feature
 capabilities should contain the eclipse feature properties
 requirements should be used for the included and required features and bundles 
 

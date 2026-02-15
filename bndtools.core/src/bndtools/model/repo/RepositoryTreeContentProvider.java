@@ -329,7 +329,7 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 			} else if (repoPlugin instanceof WorkspaceRepository) {
 				try {
 					EclipseWorkspaceRepository workspaceRepo = Central.getEclipseWorkspaceRepository();
-					result = searchR5Repository(repoPlugin, workspaceRepo);
+					result = searchR5Repository(repoPlugin, (Repository) workspaceRepo);
 				} catch (Exception e) {
 					logger.logError("Error querying workspace repository", e);
 				}
@@ -382,7 +382,10 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 										if (featureObj instanceof Feature) {
 											Feature feature = (Feature) featureObj;
 											featureIds.add(feature.getId());
-											items.add(new RepositoryFeature(repoPlugin, feature));
+											// Apply wildcardFilter to features, same as for bundles
+											if (wildcardFilter == null || matchesWildcard(feature.getId(), wildcardFilter)) {
+												items.add(new RepositoryFeature(repoPlugin, feature));
+											}
 										}
 									}
 								}
@@ -473,5 +476,23 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 				return size() > n && eldest.getKey() != null;
 	        }
 	    };
+	}
+
+	/**
+	 * Simple wildcard matcher for feature ID filtering. Converts wildcard pattern
+	 * to regex and matches against the provided string.
+	 * 
+	 * @param str the string to match (e.g., feature ID)
+	 * @param wildcardPattern the pattern with wildcards (e.g., "*feature*")
+	 * @return true if the string matches the pattern
+	 */
+	private boolean matchesWildcard(String str, String wildcardPattern) {
+		if (str == null || wildcardPattern == null) {
+			return false;
+		}
+		// Convert wildcard pattern to regex: escape special chars except *
+		String regex = wildcardPattern.replace(".", "\\.")
+			.replace("*", ".*");
+		return str.toLowerCase().matches(regex.toLowerCase());
 	}
 }
