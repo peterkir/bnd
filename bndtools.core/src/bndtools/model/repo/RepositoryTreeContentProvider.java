@@ -38,10 +38,12 @@ import aQute.bnd.build.WorkspaceRepository;
 import aQute.bnd.osgi.Builder;
 import aQute.bnd.service.FeatureProvider;
 import aQute.bnd.service.IndexProvider;
+import aQute.bnd.service.ProductProvider;
 import aQute.bnd.service.RepositoryPlugin;
 import aQute.bnd.service.ResolutionPhase;
 import aQute.bnd.version.Version;
 import aQute.p2.provider.Feature;
+import aQute.p2.provider.Product;
 import bndtools.Plugin;
 import bndtools.central.Central;
 import bndtools.central.EclipseWorkspaceRepository;
@@ -148,6 +150,10 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 		if (parentElement instanceof RepositoryPlugin) {
 			RepositoryPlugin repo = (RepositoryPlugin) parentElement;
 			result = getRepositoryBundles(repo);
+		} else if (parentElement instanceof RepositoryProduct) {
+			// CRITICAL: Check RepositoryProduct BEFORE RepositoryBundle since both extend RepositoryEntry
+			RepositoryProduct product = (RepositoryProduct) parentElement;
+			result = getProductChildren(product);
 		} else if (parentElement instanceof RepositoryFeature) {
 			// Check RepositoryFeature BEFORE RepositoryBundle since both extend
 			// RepositoryEntry
@@ -159,6 +165,10 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 		} else if (parentElement instanceof Project) {
 			Project project = (Project) parentElement;
 			result = getProjectBundles(project);
+		} else if (parentElement instanceof ProductFolderNode) {
+			ProductFolderNode folder = (ProductFolderNode) parentElement;
+			result = folder.getChildren()
+				.toArray();
 		} else if (parentElement instanceof FeatureFolderNode) {
 			FeatureFolderNode folder = (FeatureFolderNode) parentElement;
 			result = folder.getChildren()
@@ -176,11 +186,20 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 		if (element instanceof RepositoryBundleVersion) {
 			return ((RepositoryBundleVersion) element).getParentBundle();
 		}
+		if (element instanceof RepositoryProduct) {
+			return ((RepositoryProduct) element).getRepo();
+		}
 		if (element instanceof RepositoryFeature) {
 			return ((RepositoryFeature) element).getRepo();
 		}
+		if (element instanceof ProductFolderNode) {
+			return ((ProductFolderNode) element).getParent();
+		}
 		if (element instanceof FeatureFolderNode) {
 			return ((FeatureFolderNode) element).getParent();
+		}
+		if (element instanceof ProductRequiredItem) {
+			return ((ProductRequiredItem) element).getParent();
 		}
 		if (element instanceof IncludedFeatureItem) {
 			return ((IncludedFeatureItem) element).getParent();
@@ -197,6 +216,7 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 	@Override
 	public boolean hasChildren(Object element) {
 		return element instanceof RepositoryPlugin || element instanceof RepositoryBundle || element instanceof Project
+			|| element instanceof RepositoryProduct || element instanceof ProductFolderNode
 			|| element instanceof RepositoryFeature || element instanceof FeatureFolderNode;
 	}
 
@@ -320,6 +340,25 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 		return folders.toArray();
 	}
 
+	Object[] getProductChildren(RepositoryProduct product) {
+		// Create two folder nodes for the product hierarchy
+		List<ProductFolderNode> folders = new ArrayList<>();
+
+		ProductFolderNode includedFeaturesFolder = new ProductFolderNode(product,
+			ProductFolderNode.FolderType.INCLUDED_FEATURES);
+		if (includedFeaturesFolder.hasChildren()) {
+			folders.add(includedFeaturesFolder);
+		}
+
+		ProductFolderNode includedBundlesFolder = new ProductFolderNode(product,
+			ProductFolderNode.FolderType.INCLUDED_BUNDLES);
+		if (includedBundlesFolder.hasChildren()) {
+			folders.add(includedBundlesFolder);
+		}
+
+		return folders.toArray();
+	}
+
 	Object[] getRepositoryBundles(final RepositoryPlugin repoPlugin) {
 		Object[] result = null;
 
@@ -370,10 +409,36 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 					if (bsns != null) {
 						Collections.sort(bsns);
 
-						// Collect features first and track their IDs to exclude from bundles
+						// CRITICAL: Collect products first and track their IDs to exclude from features and bundles
+						Set<String> productIds = new HashSet<>();
 						Set<String> featureIds = new HashSet<>();
 						List<Object> items = new ArrayList<>();
 
+						// First collect products
+						if (repoPlugin instanceof ProductProvider) {
+							try {
+								List<?> products = ((ProductProvider) repoPlugin).getProducts();
+								if (products != null) {
+									for (Object productObj : products) {
+										if (productObj instanceof Product) {
+											Product product = (Product) productObj;
+											productIds.add(product.getId());
+											// Apply wildcardFilter to products
+											if (wildcardFilter == null || matchesWildcard(product.getId(), wildcardFilter)) {
+												items.add(new RepositoryProduct(repoPlugin, product));
+											}
+										}
+									}
+								}
+							} catch (Exception e) {
+								logger.logError(
+									MessageFormat.format("Error querying products from repository {0}.",
+										repoPlugin.getName()),
+									e);
+							}
+						}
+
+						// Then collect features, excluding product IDs
 						if (repoPlugin instanceof FeatureProvider) {
 							try {
 								List<?> features = ((FeatureProvider) repoPlugin).getFeatures();
@@ -381,10 +446,14 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 									for (Object featureObj : features) {
 										if (featureObj instanceof Feature) {
 											Feature feature = (Feature) featureObj;
-											featureIds.add(feature.getId());
-											// Apply wildcardFilter to features, same as for bundles
-											if (wildcardFilter == null || matchesWildcard(feature.getId(), wildcardFilter)) {
-												items.add(new RepositoryFeature(repoPlugin, feature));
+											String featureId = feature.getId();
+											featureIds.add(featureId);
+											// Exclude products from features
+											if (!productIds.contains(featureId)) {
+												// Apply wildcardFilter to features
+												if (wildcardFilter == null || matchesWildcard(featureId, wildcardFilter)) {
+													items.add(new RepositoryFeature(repoPlugin, feature));
+												}
 											}
 										}
 									}
@@ -397,9 +466,9 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 							}
 						}
 
-						// Collect bundles, excluding feature IDs
+						// Finally collect bundles, excluding product and feature IDs
 						for (String bsn : bsns) {
-							if (!featureIds.contains(bsn)) {
+							if (!productIds.contains(bsn) && !featureIds.contains(bsn)) {
 								items.add(new RepositoryBundle(repoPlugin, bsn));
 							}
 						}

@@ -122,6 +122,7 @@ import bndtools.model.repo.RepositoryBundle;
 import bndtools.model.repo.RepositoryBundleVersion;
 import bndtools.model.repo.RepositoryEntry;
 import bndtools.model.repo.RepositoryFeature;
+import bndtools.model.repo.RepositoryProduct;
 import bndtools.model.repo.RepositoryTreeLabelProvider;
 import bndtools.model.repo.SearchableRepositoryTreeContentProvider;
 import bndtools.preferences.BndPreferences;
@@ -1142,6 +1143,9 @@ public class RepositoriesView extends ViewPart implements RepositoriesViewRefres
 	private RepositoryPlugin getRepositoryPlugin(Object element) {
 		if (element instanceof RepositoryPlugin)
 			return (RepositoryPlugin) element;
+		else if (element instanceof RepositoryProduct)
+			// CRITICAL: Check RepositoryProduct BEFORE RepositoryBundle since both extend RepositoryEntry
+			return ((RepositoryProduct) element).getRepo();
 		else if (element instanceof RepositoryFeature)
 			// Check RepositoryFeature BEFORE RepositoryBundle since both extend RepositoryEntry
 			return ((RepositoryFeature) element).getRepo();

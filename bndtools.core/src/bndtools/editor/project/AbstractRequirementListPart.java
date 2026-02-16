@@ -38,6 +38,7 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.forms.editor.IFormPage;
 import org.eclipse.ui.forms.widgets.FormToolkit;
 import org.eclipse.ui.forms.widgets.Section;
+import org.osgi.framework.namespace.IdentityNamespace;
 import org.osgi.resource.Requirement;
 
 import aQute.bnd.build.model.clauses.VersionedClause;
@@ -51,6 +52,7 @@ import bndtools.model.repo.RepositoryBundle;
 import bndtools.model.repo.RepositoryBundleUtils;
 import bndtools.model.repo.RepositoryBundleVersion;
 import bndtools.model.repo.RepositoryFeature;
+import bndtools.model.repo.RepositoryProduct;
 import bndtools.model.repo.RepositoryResourceElement;
 import bndtools.preferences.BndPreferences;
 import bndtools.wizards.repo.RepoBundleSelectionWizard;
@@ -265,11 +267,22 @@ public abstract class AbstractRequirementListPart extends BndEditorPart implemen
 	private Requirement createRequirement(Object elem) throws Exception {
 		final String bsn;
 		String versionRange = null;
+		String type = null; // For osgi.identity type attribute
 
-		if (elem instanceof RepositoryFeature) {
+		if (elem instanceof RepositoryProduct) {
+			// Check RepositoryProduct BEFORE RepositoryFeature/RepositoryBundle since they all extend RepositoryEntry
+			RepositoryProduct rp = (RepositoryProduct) elem;
+			bsn = rp.getProduct().getId(); // Use actual product ID without prefix
+			type = "org.eclipse.equinox.p2.type.product"; // Mark as product type
+			String version = rp.getProduct().getVersion();
+			if (version != null && !version.equals("0.0.0")) {
+				versionRange = version;
+			}
+		} else if (elem instanceof RepositoryFeature) {
 			// Check RepositoryFeature BEFORE RepositoryBundle since both extend RepositoryEntry
 			RepositoryFeature rf = (RepositoryFeature) elem;
-			bsn = rf.getBsn();
+			bsn = rf.getFeature().getId(); // Use actual feature ID
+			type = "org.eclipse.equinox.p2.type.group"; // Mark as feature/group type
 			String version = rf.getFeature().getVersion();
 			if (version != null && !version.equals("0.0.0")) {
 				versionRange = version;
@@ -309,7 +322,21 @@ public abstract class AbstractRequirementListPart extends BndEditorPart implemen
 			if (versionRange != null)
 				reqBuilder.addAttribute("version", versionRange);
 		} else {
-			reqBuilder = CapReqBuilder.createBundleRequirement(bsn, versionRange);
+			// Create osgi.identity requirement with type filter for products
+			if (type != null) {
+				reqBuilder = new CapReqBuilder(IdentityNamespace.IDENTITY_NAMESPACE);
+				// Build filter: (&(osgi.identity=id)(type=org.eclipse.equinox.p2.type.product)(version>=x))
+				StringBuilder filter = new StringBuilder("(&");
+				filter.append("(").append(IdentityNamespace.IDENTITY_NAMESPACE).append("=").append(bsn).append(")");
+				filter.append("(").append(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE).append("=").append(type).append(")");
+				if (versionRange != null) {
+					filter.append("(version>=").append(versionRange).append(")");
+				}
+				filter.append(")");
+				reqBuilder.addDirective("filter", filter.toString());
+			} else {
+				reqBuilder = CapReqBuilder.createBundleRequirement(bsn, versionRange);
+			}
 		}
 		return reqBuilder.buildSyntheticRequirement();
 	}

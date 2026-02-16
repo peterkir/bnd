@@ -64,6 +64,7 @@ import bndtools.model.repo.RepositoryBundle;
 import bndtools.model.repo.RepositoryBundleUtils;
 import bndtools.model.repo.RepositoryBundleVersion;
 import bndtools.model.repo.RepositoryFeature;
+import bndtools.model.repo.RepositoryProduct;
 import bndtools.model.repo.RepositoryResourceElement;
 import bndtools.preferences.BndPreferences;
 import bndtools.types.Pair;
@@ -203,7 +204,8 @@ public abstract class RepositoryBundleSelectionPart extends BndEditorPart implem
 			private boolean selectionIsDroppable(Object element) {
 				return element instanceof RepositoryBundle || element instanceof RepositoryBundleVersion
 					|| element instanceof ProjectBundle || element instanceof RepositoryResourceElement
-					|| element instanceof RepositoryFeature || element instanceof IncludedBundleItem;
+					|| element instanceof RepositoryFeature || element instanceof RepositoryProduct
+					|| element instanceof IncludedBundleItem;
 			}
 
 			@Override
@@ -309,6 +311,21 @@ public abstract class RepositoryBundleSelectionPart extends BndEditorPart implem
 						// Add feature=true attribute for resolver identification
 						newClause.getAttribs()
 							.put("feature", "true");
+						adding.add(newClause);
+					} else if (item instanceof RepositoryProduct) {
+						RepositoryProduct product = (RepositoryProduct) item;
+						// Create VersionedClause with "product:id" BSN and product=true attribute
+						VersionedClause newClause = new VersionedClause("product:" + product.getProduct()
+							.getId(), new Attrs());
+						// Set version if available
+						if (product.getProduct()
+							.getVersion() != null) {
+							newClause.setVersionRange(product.getProduct()
+								.getVersion());
+						}
+						// Add product=true attribute for resolver identification
+						newClause.getAttribs()
+							.put("product", "true");
 						adding.add(newClause);
 					} else if (item instanceof IncludedBundleItem) {
 						IncludedBundleItem bundleItem = (IncludedBundleItem) item;

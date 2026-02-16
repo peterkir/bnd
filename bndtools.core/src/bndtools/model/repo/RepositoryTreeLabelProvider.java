@@ -22,6 +22,7 @@ public class RepositoryTreeLabelProvider extends StyledCellLabelProvider
 	final Image				projectImg	= Icons.image("project");
 	final Image				loadingImg	= Icons.image("loading");
 	final Image				featureImg	= Icons.image("feature");
+	final Image				productImg	= Icons.image("product");
 	final Image				folderImg	= Icons.image("fldr_obj");
 
 	private final boolean	showRepoId;
@@ -106,6 +107,18 @@ public class RepositoryTreeLabelProvider extends StyledCellLabelProvider
 					}
 					image = bundleImg;
 				}
+			} else if (element instanceof RepositoryProduct) {
+				// CRITICAL: Check RepositoryProduct BEFORE RepositoryBundle since both extend RepositoryEntry
+				if (index == 0) {
+					RepositoryProduct product = (RepositoryProduct) element;
+					label.append(product.getText());
+					if (showRepoId) {
+						label.append(" ");
+						label.append("[" + product.getRepo()
+							.getName() + "]", StyledString.QUALIFIER_STYLER);
+					}
+					image = productImg;
+				}
 			} else if (element instanceof RepositoryFeature) {
 				// Check RepositoryFeature BEFORE RepositoryBundle since both extend RepositoryEntry
 				if (index == 0) {
@@ -154,11 +167,24 @@ public class RepositoryTreeLabelProvider extends StyledCellLabelProvider
 					}
 					image = featureImg;
 				}
+			} else if (element instanceof ProductFolderNode) {
+				if (index == 0) {
+					ProductFolderNode folder = (ProductFolderNode) element;
+					label.append(folder.getLabel());
+					image = productImg;
+				}
 			} else if (element instanceof FeatureFolderNode) {
 				if (index == 0) {
 					FeatureFolderNode folder = (FeatureFolderNode) element;
 					label.append(folder.getLabel());
 					image = folderImg;
+				}
+			} else if (element instanceof ProductRequiredItem) {
+				if (index == 0) {
+					ProductRequiredItem item = (ProductRequiredItem) element;
+					label.append(item.getText());
+					// Use feature or bundle icon based on type
+					image = item.isFeature() ? featureImg : bundleImg;
 				}
 			} else if (element instanceof IncludedFeatureItem) {
 				if (index == 0) {
@@ -229,6 +255,9 @@ public class RepositoryTreeLabelProvider extends StyledCellLabelProvider
 		if (element instanceof ProjectBundle pb)
 			return pb.getBsn();
 
+		if (element instanceof RepositoryProduct rp)
+			return rp.getText();
+
 		if (element instanceof RepositoryBundle rb)
 			return rb.getText();
 
@@ -241,8 +270,14 @@ public class RepositoryTreeLabelProvider extends StyledCellLabelProvider
 		if (element instanceof RepositoryFeature rf)
 			return rf.getText();
 
+		if (element instanceof ProductFolderNode pfn)
+			return pfn.getLabel();
+
 		if (element instanceof FeatureFolderNode ffn)
 			return ffn.getLabel();
+
+		if (element instanceof ProductRequiredItem pri)
+			return pri.getText();
 
 		if (element instanceof IncludedFeatureItem ifi)
 			return ifi.getText();

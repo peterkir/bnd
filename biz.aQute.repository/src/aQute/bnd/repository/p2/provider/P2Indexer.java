@@ -48,6 +48,7 @@ import aQute.p2.api.ArtifactProvider;
 import aQute.p2.packed.Unpack200;
 import aQute.p2.provider.Feature;
 import aQute.p2.provider.P2Impl;
+import aQute.p2.provider.Product;
 import aQute.p2.provider.TargetImpl;
 import aQute.service.reporter.Reporter;
 
@@ -550,6 +551,237 @@ class P2Indexer implements Closeable {
 		}
 		
 		return null;
+	}
+	
+	/**
+	 * Get all products available in this repository.
+	 *
+	 * @return a list of products, or empty list if none available
+	 * @throws Exception if an error occurs while fetching products
+	 */
+	public List<Product> getProducts() throws Exception {
+		List<Product> products = new ArrayList<>();
+		
+		// Get all resources from the repository
+		org.osgi.service.repository.Repository repository = getBridge().getRepository();
+		
+		// Create a wildcard requirement to find all identity capabilities
+		aQute.bnd.osgi.resource.RequirementBuilder rb = new aQute.bnd.osgi.resource.RequirementBuilder(
+			IdentityNamespace.IDENTITY_NAMESPACE);
+		Requirement req = rb.buildSyntheticRequirement();
+		
+		// Find all providers
+		Map<Requirement, Collection<Capability>> providers = repository.findProviders(
+			java.util.Collections.singleton(req));
+		Collection<Capability> allCaps = providers.get(req);
+		
+		if (allCaps == null || allCaps.isEmpty()) {
+			return products;
+		}
+		
+		// Get unique resources
+		Set<Resource> allResources = aQute.bnd.osgi.resource.ResourceUtils.getResources(allCaps);
+		
+		// Filter resources with type=org.eclipse.equinox.p2.type.product in identity capability
+		for (Resource resource : allResources) {
+			List<Capability> identities = resource.getCapabilities(IdentityNamespace.IDENTITY_NAMESPACE);
+			for (Capability identity : identities) {
+				Object type = identity.getAttributes().get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
+				if ("org.eclipse.equinox.p2.type.product".equals(type)) {
+					// Extract the product from the resource
+					Product product = extractProductFromResource(resource);
+					if (product != null) {
+						products.add(product);
+					}
+					break;
+				}
+			}
+		}
+		
+		return products;
+	}
+
+	/**
+	 * Get a specific product by ID and version.
+	 * 
+	 * @param id the product ID
+	 * @param version the product version
+	 * @return the product, or null if not found
+	 * @throws Exception if an error occurs while fetching the product
+	 */
+	public Product getProduct(String id, String version) throws Exception {
+		// Get all resources from the repository
+		org.osgi.service.repository.Repository repository = getBridge().getRepository();
+		
+		// Create a wildcard requirement to find all identity capabilities
+		aQute.bnd.osgi.resource.RequirementBuilder rb = new aQute.bnd.osgi.resource.RequirementBuilder(
+			IdentityNamespace.IDENTITY_NAMESPACE);
+		Requirement req = rb.buildSyntheticRequirement();
+		
+		// Find all providers
+		Map<Requirement, Collection<Capability>> providers = repository.findProviders(
+			java.util.Collections.singleton(req));
+		Collection<Capability> allCaps = providers.get(req);
+		
+		if (allCaps == null || allCaps.isEmpty()) {
+			return null;
+		}
+		
+		// Get unique resources
+		Set<Resource> allResources = aQute.bnd.osgi.resource.ResourceUtils.getResources(allCaps);
+		
+		org.osgi.framework.Version requestedVersion = org.osgi.framework.Version.parseVersion(version);
+		
+		// Find the matching product resource
+		for (Resource resource : allResources) {
+			List<Capability> identities = resource.getCapabilities(IdentityNamespace.IDENTITY_NAMESPACE);
+			for (Capability identity : identities) {
+				Object type = identity.getAttributes().get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
+				Object idAttr = identity.getAttributes().get(IdentityNamespace.IDENTITY_NAMESPACE);
+				Object versionAttr = identity.getAttributes().get(IdentityNamespace.CAPABILITY_VERSION_ATTRIBUTE);
+				
+				if ("org.eclipse.equinox.p2.type.product".equals(type) && 
+					id.equals(idAttr) && 
+					requestedVersion.equals(versionAttr)) {
+					return extractProductFromResource(resource);
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Extract a Product object from a Resource.
+	 * 
+	 * @param resource the resource representing the product
+	 * @return the Product, or null if extraction fails
+	 */
+	private Product extractProductFromResource(Resource resource) {
+		try {
+			// Products in P2 are stored as capabilities in the resource itself
+			// Extract the identity capability to get product information
+			List<Capability> identities = resource.getCapabilities(IdentityNamespace.IDENTITY_NAMESPACE);
+			for (Capability identity : identities) {
+				Object type = identity.getAttributes().get(IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE);
+				if ("org.eclipse.equinox.p2.type.product".equals(type)) {
+					// Create a Product from the resource's capabilities
+					return createProductFromResource(resource, identity);
+				}
+			}
+			return null;
+		} catch (Exception e) {
+			logger.debug("Failed to extract product from resource: {}", e.getMessage(), e);
+			return null;
+		}
+	}
+	
+	/**
+	 * Create a Product object from a resource's identity capability.
+	 * 
+	 * @param resource the resource
+	 * @param identity the identity capability
+	 * @return the Product
+	 */
+	private Product createProductFromResource(Resource resource, Capability identity) throws Exception {
+		// Get product ID and version from identity capability
+		String id = (String) identity.getAttributes().get(IdentityNamespace.IDENTITY_NAMESPACE);
+		Object versionObj = identity.getAttributes().get(IdentityNamespace.CAPABILITY_VERSION_ATTRIBUTE);
+		String version = versionObj != null ? versionObj.toString() : "0.0.0";
+		
+		// Create a minimal Product instance
+		// Products don't have XML files like features, they're defined inline in content.xml
+		Product product = new Product((org.w3c.dom.Document) null);
+		product.id = id;
+		product.version = version;
+		
+		// Extract requirements from the resource and convert to Product.Required
+		// Use FilterParser to properly parse the requirement filters
+		aQute.bnd.osgi.resource.FilterParser filterParser = new aQute.bnd.osgi.resource.FilterParser();
+		List<org.osgi.resource.Requirement> resourceRequirements = resource.getRequirements(null);
+		
+		for (org.osgi.resource.Requirement req : resourceRequirements) {
+			Product.Required productReq = new Product.Required();
+			productReq.namespace = req.getNamespace();
+			
+			// Parse the requirement filter to extract name and version range
+			try {
+				aQute.bnd.osgi.resource.FilterParser.Expression expression = filterParser.parse(req);
+				
+				// Check for identity expression which gives us the name directly
+				if (expression instanceof aQute.bnd.osgi.resource.FilterParser.IdentityExpression) {
+					aQute.bnd.osgi.resource.FilterParser.IdentityExpression idExpr = 
+						(aQute.bnd.osgi.resource.FilterParser.IdentityExpression) expression;
+					productReq.name = idExpr.getSymbolicName();
+					
+					// Get version range if present
+					aQute.bnd.osgi.resource.FilterParser.RangeExpression rangeExpr = idExpr.getRangeExpression();
+					if (rangeExpr != null) {
+						productReq.range = rangeExpr.getRangeString();
+					}
+				}
+				// Check for bundle expression
+				else if (expression instanceof aQute.bnd.osgi.resource.FilterParser.BundleExpression) {
+					aQute.bnd.osgi.resource.FilterParser.BundleExpression bundleExpr = 
+						(aQute.bnd.osgi.resource.FilterParser.BundleExpression) expression;
+					productReq.name = bundleExpr.printExcludingRange();
+					
+					// Get version range if present
+					aQute.bnd.osgi.resource.FilterParser.RangeExpression rangeExpr = bundleExpr.getRangeExpression();
+					if (rangeExpr != null) {
+						productReq.range = rangeExpr.getRangeString();
+					}
+				}
+				// Check for package expression
+				else if (expression instanceof aQute.bnd.osgi.resource.FilterParser.PackageExpression) {
+					aQute.bnd.osgi.resource.FilterParser.PackageExpression pkgExpr = 
+						(aQute.bnd.osgi.resource.FilterParser.PackageExpression) expression;
+					productReq.name = pkgExpr.getPackageName();
+					
+					// Get version range if present
+					aQute.bnd.osgi.resource.FilterParser.RangeExpression rangeExpr = pkgExpr.getRangeExpression();
+					if (rangeExpr != null) {
+						productReq.range = rangeExpr.getRangeString();
+					}
+				}
+				// For simple expressions, extract key/value
+				else if (expression instanceof aQute.bnd.osgi.resource.FilterParser.SimpleExpression) {
+					aQute.bnd.osgi.resource.FilterParser.SimpleExpression simpleExpr = 
+						(aQute.bnd.osgi.resource.FilterParser.SimpleExpression) expression;
+					productReq.name = simpleExpr.getValue();
+				}
+			} catch (Exception e) {
+				logger.debug("Failed to parse requirement filter: {}", e.getMessage(), e);
+				// Fallback: Try to extract from raw filter string
+				Map<String, String> directives = req.getDirectives();
+				String filter = directives.get("filter");
+				if (filter != null) {
+					// Simple extraction for osgi.identity filters like "(osgi.identity=bundle.name)"
+					int nameStart = filter.indexOf(req.getNamespace() + "=");
+					if (nameStart == -1) {
+						nameStart = filter.indexOf("osgi.identity=");
+					}
+					if (nameStart != -1) {
+						int equals = filter.indexOf('=', nameStart);
+						int closeParen = filter.indexOf(')', equals);
+						if (equals != -1 && closeParen != -1) {
+							productReq.name = filter.substring(equals + 1, closeParen).trim();
+						}
+					}
+				}
+			}
+			
+			// Check optional directive
+			String resolution = req.getDirectives().get("resolution");
+			productReq.optional = "optional".equals(resolution);
+			
+			// Only add if we successfully parsed a name
+			if (productReq.name != null && !productReq.name.isEmpty()) {
+				product.getRequires().add(productReq);
+			}
+		}
+		
+		return product;
 	}
 	
 	/**
