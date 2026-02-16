@@ -1,0 +1,65 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<?metadataRepository version='1.2.0'?>
+<repository name='Test Products Repository' type='org.eclipse.equinox.internal.p2.metadata.repository.LocalMetadataRepository' version='1'>
+  <properties size='2'>
+    <property name='p2.timestamp' value='1638360000000'/>
+    <property name='p2.compressed' value='false'/>
+  </properties>
+  <units size='2'>
+    <unit id='example-rcp-app-ui-feature' version='1.0.0.202512011200'>
+      <properties size='5'>
+        <property name='org.eclipse.equinox.p2.name' value='Example RCP Feature Product'/>
+        <property name='org.eclipse.equinox.p2.type.product' value='true'/>
+        <property name='org.eclipse.equinox.p2.type.group' value='true'/>
+        <property name='org.eclipse.equinox.p2.description' value='Example RCP application product based on feature'/>
+        <property name='org.eclipse.equinox.p2.provider' value='Example Inc.'/>
+      </properties>
+      <provides size='1'>
+        <provided namespace='org.eclipse.equinox.p2.iu' name='example-rcp-app-ui-feature' version='1.0.0.202512011200'/>
+      </provides>
+      <requires size='5'>
+        <required namespace='org.eclipse.equinox.p2.iu' name='example.feature.group' range='[1.0.0.202512011200,1.0.0.202512011200]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='org.eclipse.platform.feature.group' range='[4.38.0,4.38.0]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='org.eclipse.rcp.feature.group' range='[4.38.0,4.38.0]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='toolingexample-rcp-app-ui-feature.configuration' range='[1.0.0.202512011200,1.0.0.202512011200]'/>
+        <required namespace='osgi.ee' name='JavaSE' range='0.0.0'/>
+      </requires>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.0'/>
+      <touchpointData size='1'>
+        <instructions size='1'>
+          <instruction key='configure'>
+            mkdir(path:${installFolder}/configuration);
+          </instruction>
+        </instructions>
+      </touchpointData>
+    </unit>
+    <unit id='example-rcp-app-ui-plugin' version='1.0.0.202512011200'>
+      <properties size='5'>
+        <property name='org.eclipse.equinox.p2.name' value='Example RCP Plugin Product'/>
+        <property name='org.eclipse.equinox.p2.type.product' value='true'/>
+        <property name='org.eclipse.equinox.p2.type.group' value='true'/>
+        <property name='org.eclipse.equinox.p2.description' value='Example RCP application product based on plugin'/>
+        <property name='org.eclipse.equinox.p2.provider' value='Example Inc.'/>
+      </properties>
+      <provides size='1'>
+        <provided namespace='org.eclipse.equinox.p2.iu' name='example-rcp-app-ui-plugin' version='1.0.0.202512011200'/>
+      </provides>
+      <requires size='6'>
+        <required namespace='org.eclipse.equinox.p2.iu' name='example.ui' range='[1.0.0,1.0.0]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='org.eclipse.equinox.p2.user.ui.feature.group' range='[2.4.3000,2.4.3000]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='org.eclipse.platform.feature.group' range='[4.38.0,4.38.0]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='toolingexample-rcp-app-ui-plugin.application' range='[1.0.0.202512011200,1.0.0.202512011200]'/>
+        <required namespace='org.eclipse.equinox.p2.iu' name='tooling.osgi.bundle.default' range='[1.0.0,1.0.0]'/>
+        <required namespace='osgi.ee' name='JavaSE' range='0.0.0'/>
+      </requires>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.0'/>
+      <touchpointData size='1'>
+        <instructions size='1'>
+          <instruction key='configure'>
+            mkdir(path:${installFolder}/dropins);
+          </instruction>
+        </instructions>
+      </touchpointData>
+    </unit>
+  </units>
+</repository>

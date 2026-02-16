@@ -149,8 +149,7 @@ class P2Indexer implements Closeable {
 
 	private ResourcesRepository readRepository() throws Exception {
 		ArtifactProvider p2;
-		if (this.url.getPath()
-			.endsWith(".target"))
+		if (isTargetPlatform(this.url))
 			p2 = new TargetImpl(processor, client, this.url, promiseFactory);
 		else
 			p2 = new P2Impl(processor, client, this.url, promiseFactory);
@@ -161,6 +160,17 @@ class P2Indexer implements Closeable {
 
 		Promise<List<Resource>> all = artifacts.stream()
 			.map(a -> {
+				// Products don't have URIs, they're metadata-only
+				if (a.classifier == aQute.p2.api.Classifier.PRODUCT) {
+					// Process product directly without fetching
+					try {
+						return promiseFactory.resolved(processArtifact(a, null));
+					} catch (Exception e) {
+						logger.info("{}: Failed to create resource for product {}", name, a.id, e);
+						return promiseFactory.resolved(RECOVERY);
+					}
+				}
+				
 				if (!visitedURIs.add(a.uri))
 					return null;
 				if (a.md5 != null) {
@@ -185,6 +195,25 @@ class P2Indexer implements Closeable {
 			.filter(resource -> resource != RECOVERY)
 			.collect(toResourcesRepository()))
 			.getValue();
+	}
+
+	static boolean isTargetPlatform(URI repositoryUri) {
+		String path = repositoryUri.getPath();
+		if (path == null) {
+			path = repositoryUri.getSchemeSpecificPart();
+		}
+		if (path == null) {
+			return false;
+		}
+		int queryIndex = path.indexOf('?');
+		if (queryIndex >= 0) {
+			path = path.substring(0, queryIndex);
+		}
+		int fragmentIndex = path.indexOf('#');
+		if (fragmentIndex >= 0) {
+			path = path.substring(0, fragmentIndex);
+		}
+		return path.endsWith(".target");
 	}
 
 	private Promise<TaggedData> fetch(Artifact a, int retries, long delay) {
@@ -242,8 +271,8 @@ class P2Indexer implements Closeable {
 	}
 
 	/**
-	 * Process an artifact (bundle or feature) and convert it to an OSGi
-	 * Resource
+	 * Process an artifact (bundle, feature, or product) and convert it to an
+	 * OSGi Resource
 	 */
 	private SupportingResource processArtifact(Artifact artifact, File file) throws Exception {
 		ResourceBuilder rb = new ResourceBuilder();
@@ -276,10 +305,122 @@ class P2Indexer implements Closeable {
 					rb.addRequirement(crb);
 				}
 			}
+		} else if (artifact.classifier == aQute.p2.api.Classifier.PRODUCT) {
+			// Products are metadata-only, reconstruct from artifact properties
+			// Create identity capability
+			aQute.bnd.osgi.resource.CapReqBuilder identity = new aQute.bnd.osgi.resource.CapReqBuilder(
+				org.osgi.framework.namespace.IdentityNamespace.IDENTITY_NAMESPACE);
+			identity.addAttribute(org.osgi.framework.namespace.IdentityNamespace.IDENTITY_NAMESPACE, artifact.id);
+			identity.addAttribute(org.osgi.framework.namespace.IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE,
+				"org.eclipse.equinox.p2.type.product");
+			identity.addAttribute(org.osgi.framework.namespace.IdentityNamespace.CAPABILITY_VERSION_ATTRIBUTE,
+				artifact.version);
+			
+			// Add product properties as attributes
+			Map<String, String> artifactProps = artifact.getProperties();
+			for (Map.Entry<String, String> entry : artifactProps.entrySet()) {
+				String key = entry.getKey();
+				String value = entry.getValue();
+				
+				// Skip internal property
+				if (key.startsWith("_product.")) {
+					continue;
+				}
+				
+				// Map P2 properties to simpler attribute names
+				if (key.equals("org.eclipse.equinox.p2.name")) {
+					identity.addAttribute("name", value);
+				} else if (key.equals("org.eclipse.equinox.p2.description")) {
+					identity.addAttribute("description", value);
+				} else if (key.equals("org.eclipse.equinox.p2.provider")) {
+					identity.addAttribute("provider", value);
+				} else if (key.equals("org.eclipse.equinox.p2.type.group")) {
+					identity.addAttribute("type.group", value);
+				} else if (key.equals("org.eclipse.equinox.p2.type.product")) {
+					identity.addAttribute("type.product", value);
+				} else {
+					// Add other properties
+					identity.addAttribute(key, value);
+				}
+			}
+			
+			rb.addCapability(identity);
+			
+			// Parse and add requirements
+			String reqsString = artifactProps.get("_product.requires");
+			if (reqsString != null && !reqsString.isEmpty()) {
+				String[] reqs = reqsString.split(";");
+				for (String reqStr : reqs) {
+					String[] parts = reqStr.split("\\|", -1);
+					if (parts.length >= 5) {
+						String namespace = parts[0];
+						String name = parts[1];
+						String range = parts[2];
+						boolean optional = "true".equals(parts[3]);
+						String filter = parts[4];
+						
+						// Skip tooling requirements
+						if (name.startsWith("tooling")) {
+							continue;
+						}
+						
+						// Create requirement
+						aQute.bnd.osgi.resource.CapReqBuilder req = new aQute.bnd.osgi.resource.CapReqBuilder(namespace);
+						
+						// Build filter
+						StringBuilder filterBuilder = new StringBuilder();
+						if (namespace.equals("org.eclipse.equinox.p2.iu")) {
+							filterBuilder.append("(");
+							filterBuilder.append(namespace);
+							filterBuilder.append("=");
+							filterBuilder.append(name);
+							filterBuilder.append(")");
+							
+							if (range != null && !range.isEmpty() && !range.equals("0.0.0")) {
+								filterBuilder.insert(0, "(&");
+								filterBuilder.append("(version");
+								filterBuilder.append(range);
+								filterBuilder.append("))");
+							}
+						} else if (namespace.equals("osgi.ee")) {
+							filterBuilder.append("(");
+							filterBuilder.append(namespace);
+							filterBuilder.append("=");
+							filterBuilder.append(name);
+							filterBuilder.append(")");
+						} else {
+							filterBuilder.append("(");
+							filterBuilder.append(namespace);
+							filterBuilder.append("=");
+							filterBuilder.append(name);
+							filterBuilder.append(")");
+						}
+						
+						// Combine with additional filter if present
+						if (filter != null && !filter.isEmpty()) {
+							String combinedFilter = "(&" + filterBuilder.toString() + filter + ")";
+							req.addDirective("filter", combinedFilter);
+						} else {
+							req.addDirective("filter", filterBuilder.toString());
+						}
+						
+						if (optional) {
+							req.addDirective("resolution", "optional");
+						}
+						
+						rb.addRequirement(req);
+					}
+				}
+			}
+			
+			// No file content for products
+			return rb.build();
 		}
 
 		// Add content capability for the artifact (bundle or feature JAR)
-		rb.addFile(file, artifact.uri);
+		if (file != null) {
+			rb.addFile(file, artifact.uri);
+		}
 
 		return rb.build();
 	}

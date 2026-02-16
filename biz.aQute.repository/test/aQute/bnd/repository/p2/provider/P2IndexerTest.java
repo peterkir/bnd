@@ -60,6 +60,23 @@ public class P2IndexerTest {
 	}
 
 	@Test
+	public void testTargetDetectionWithOpaqueFileUri() throws Exception {
+		URI opaqueTarget = new URI("file:C:/tmp/example.target");
+		assertThat(opaqueTarget.getPath()).isNull();
+		assertThat(P2Indexer.isTargetPlatform(opaqueTarget)).isTrue();
+
+		URI opaqueNonTarget = new URI("file:C:/tmp/example.xml");
+		assertThat(opaqueNonTarget.getPath()).isNull();
+		assertThat(P2Indexer.isTargetPlatform(opaqueNonTarget)).isFalse();
+	}
+
+	@Test
+	public void testTargetDetectionWithQueryAndFragment() throws Exception {
+		URI uri = new URI("https://example.org/path/example.target?foo=bar#frag");
+		assertThat(P2Indexer.isTargetPlatform(uri)).isTrue();
+	}
+
+	@Test
 	public void testFile() throws Throwable {
 		try (HttpClient client = new HttpClient()) {
 			client.setCache(IO.getFile(tmp, "cache"));

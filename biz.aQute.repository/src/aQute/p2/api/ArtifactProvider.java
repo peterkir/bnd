@@ -24,4 +24,10 @@ public interface ArtifactProvider {
 			.collect(Collectors.toList());
 	}
 
+	default List<Artifact> getProducts() throws Exception {
+		return getAllArtifacts().stream()
+			.filter(a -> a.classifier == Classifier.PRODUCT)
+			.collect(Collectors.toList());
+	}
+
 }

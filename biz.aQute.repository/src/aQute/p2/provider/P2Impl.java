@@ -50,6 +50,7 @@ public class P2Impl implements ArtifactProvider {
 	}
 
 	private URI normalize(URI base) throws Exception {
+		base = normalizeOpaqueFileUri(base);
 		String path = base.getPath();
 		if (path == null || path.endsWith("/"))
 			return base;
@@ -57,11 +58,42 @@ public class P2Impl implements ArtifactProvider {
 		return new URI(base.toString() + "/");
 	}
 
+	static URI normalizeOpaqueFileUri(URI uri) {
+		if (!uri.isOpaque() || !"file".equalsIgnoreCase(uri.getScheme())) {
+			return uri;
+		}
+		String schemeSpecificPart = uri.getSchemeSpecificPart();
+		if (schemeSpecificPart == null || schemeSpecificPart.isEmpty()) {
+			return uri;
+		}
+		return new File(schemeSpecificPart).toURI();
+	}
+
+	private static String path(URI uri) {
+		String path = uri.getPath();
+		if (path != null) {
+			return path;
+		}
+		String schemeSpecificPart = uri.getSchemeSpecificPart();
+		return (schemeSpecificPart != null) ? schemeSpecificPart : "";
+	}
+
 	@Override
 	public List<Artifact> getAllArtifacts() throws Exception {
 		Set<URI> cycles = Collections.newSetFromMap(new ConcurrentHashMap<URI, Boolean>());
-		List<Artifact> value = getArtifacts(cycles, base).getValue();
-		return value;
+
+		// Get artifacts from artifacts.xml (bundles and features)
+		List<Artifact> artifactsResult = getArtifacts(cycles, base).getValue();
+
+		// Get products from content.xml
+		Set<URI> contentCycles = Collections.newSetFromMap(new ConcurrentHashMap<URI, Boolean>());
+		List<Artifact> contentResult = getContentArtifacts(contentCycles, base).getValue();
+
+		// Combine results
+		List<Artifact> combined = new ArrayList<>(artifactsResult);
+		combined.addAll(contentResult);
+
+		return combined;
 	}
 
 	// For backward compatibility reasons
@@ -73,12 +105,13 @@ public class P2Impl implements ArtifactProvider {
 	}
 
 	private Promise<List<Artifact>> getArtifacts(Set<URI> cycles, URI uri) {
+		uri = normalizeOpaqueFileUri(uri);
 		if (!cycles.add(uri)) {
 			return promiseFactory.resolved(Collections.emptyList());
 		}
 
 		try {
-			String type = uri.getPath();
+			String type = path(uri);
 			logger.info("getArtifacts type={}", uri);
 			if (type.endsWith("/compositeArtifacts.xml")) {
 				return parseCompositeArtifacts(cycles, hideAndSeek(uri), uri);
@@ -151,7 +184,8 @@ public class P2Impl implements ArtifactProvider {
 	}
 
 	private InputStream hideAndSeek(URI uri) throws Exception {
-		if (uri.getPath()
+		String path = path(uri);
+		if (path
 			.endsWith(".xz")) {
 			File f = getFile(uri);
 			if (f != null)
@@ -167,7 +201,7 @@ public class P2Impl implements ArtifactProvider {
 
 		f = getFile(replace(uri, ".xml$", ".jar"));
 		if (f != null)
-			return jarStream(f, Strings.getLastSegment(uri.getPath(), '/'));
+			return jarStream(f, Strings.getLastSegment(path, '/'));
 
 		f = getFile(uri);
 		if (f != null)
@@ -203,6 +237,12 @@ public class P2Impl implements ArtifactProvider {
 
 	private URI replace(URI uri, String where, String replacement) {
 		String path = uri.getRawPath();
+		if (path == null) {
+			path = path(uri);
+		}
+		if (path == null || path.isEmpty()) {
+			return uri;
+		}
 		return uri.resolve(path.replaceAll(where, replacement));
 	}
 
@@ -236,12 +276,117 @@ public class P2Impl implements ArtifactProvider {
 		return getArtifacts(cycles, index.artifacts);
 	}
 
+	/**
+	 * Get content artifacts (products) from content.xml
+	 */
+	private Promise<List<Artifact>> getContentArtifacts(Set<URI> cycles, URI uri) {
+		uri = normalizeOpaqueFileUri(uri);
+		if (!cycles.add(uri)) {
+			return promiseFactory.resolved(Collections.emptyList());
+		}
+
+		try {
+			String type = path(uri);
+			logger.info("getContentArtifacts type={}", uri);
+			if (type.endsWith("/compositeContent.xml")) {
+				return parseCompositeContent(cycles, hideAndSeek(uri), uri);
+			} else if (type.endsWith("/content.xml.xz")) {
+				return parseContent(hideAndSeek(uri), uri);
+			} else if (type.endsWith("/content.xml")) {
+				return parseContent(hideAndSeek(uri), uri);
+			} else if (type.endsWith("/p2.index")) {
+				return parseIndexContent(cycles, uri);
+			}
+			uri = normalize(uri).resolve("p2.index");
+			defaults.add(uri);
+			return parseIndexContent(cycles, uri);
+		} catch (Exception e) {
+			logger.error("getContentArtifacts", e);
+			return promiseFactory.failed(e);
+		}
+	}
+
+	private Promise<List<Artifact>> parseContent(InputStream in, URI uri) throws Exception {
+		if (in == null) {
+			logger.info("No content for {}", uri);
+			return promiseFactory.resolved(Collections.emptyList());
+		}
+
+		return promiseFactory.submit(() -> {
+			try {
+				ContentRepository cr = new ContentRepository(in, uri);
+				return cr.getArtifacts();
+			} finally {
+				IO.close(in);
+			}
+		});
+	}
+
+	private Promise<List<Artifact>> parseCompositeContent(Set<URI> cycles, InputStream in, URI base)
+		throws Exception {
+		if (in == null) {
+			logger.info("No such composite content {}", base);
+			return promiseFactory.resolved(Collections.emptyList());
+		}
+
+		CompositeContent cc = new CompositeContent(in, base);
+		cc.parse();
+
+		return getContentArtifacts(cycles, cc.uris);
+	}
+
+	private Promise<List<Artifact>> getContentArtifacts(Set<URI> cycles, final Collection<URI> uris) {
+		Deferred<List<Artifact>> deferred = promiseFactory.deferred();
+		promiseFactory.executor()
+			.execute(() -> {
+				try {
+					deferred.resolveWith(uris.stream()
+						.map(uri -> getContentArtifacts(cycles, base.resolve(uri)).recover(failed -> {
+							if (!defaults.contains(uri)) {
+								logger.info("Failed to get content artifacts for {}", uri, failed.getFailure());
+							}
+							return Collections.emptyList();
+						}))
+						.collect(promiseFactory.toPromise())
+						.map(ll -> ll.stream()
+							.flatMap(List::stream)
+							.collect(toList())));
+				} catch (Throwable e) {
+					deferred.fail(e);
+				}
+			});
+		return deferred.getPromise();
+	}
+
+	private Promise<List<Artifact>> parseIndexContent(Set<URI> cycles, final URI uri) throws Exception {
+		Promise<File> file = client.build()
+			.useCache()
+			.get()
+			.async(uri.toURL());
+		return file.flatMap(f -> parseIndexContent(cycles, uri, f));
+	}
+
+	private Promise<List<Artifact>> parseIndexContent(Set<URI> cycles, URI uri, File file) throws Exception {
+		P2Index index;
+
+		if (file == null) {
+			index = getDefaultIndex(uri);
+		} else {
+			index = parseIndex(file, uri);
+		}
+
+		canonicalize(index.artifacts);
+		canonicalize(index.content);
+
+		return getContentArtifacts(cycles, index.content);
+	}
+
 	private void canonicalize(List<URI> artifacts) throws URISyntaxException {
 		if (artifacts.size() < 2)
 			return;
 
 		for (URI uri : new ArrayList<>(artifacts)) {
-			if (uri.getPath()
+			if (path(uri)
 				.endsWith(".xml"))
 				artifacts.remove(new URI(uri.toString() + ".xz"));
 		}
