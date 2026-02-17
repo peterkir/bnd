@@ -1,6 +1,7 @@
 package aQute.p2.provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.io.File;
 import java.io.InputStream;
@@ -8,6 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import aQute.bnd.osgi.resource.FilterParser;
 import aQute.lib.io.IO;
 import aQute.p2.api.Artifact;
 import aQute.p2.api.Classifier;
@@ -109,8 +111,12 @@ public class ProductTest {
 			assertThat(requirements).isNotEmpty();
 			
 			// Verify filter directives are present
+			FilterParser parser = new FilterParser();
 			for (org.osgi.resource.Requirement req : requirements) {
-				assertThat(req.getDirectives()).containsKey("filter");
+				String filter = req.getDirectives().get("filter");
+				assertThat(filter).isNotBlank();
+				assertThat(filter).doesNotContain("(version[");
+				assertThatCode(() -> parser.parse(filter)).doesNotThrowAnyException();
 			}
 		}
 	}

@@ -41,6 +41,34 @@ public class P2IndexerTest {
 	}
 
 	@Test
+	public void testProvidesP2IuCapabilities() throws Exception {
+		try (HttpClient client = new HttpClient()) {
+			client.setCache(IO.getFile(tmp, "cache"));
+
+			File input = IO.getFile("testdata/p2/macbadge");
+			assertThat(input).as("%s must be dir", input)
+				.isDirectory();
+
+			try (P2Indexer p2 = new P2Indexer(new Unpack200(), new Slf4jReporter(P2IndexerTest.class), tmp, client,
+				input.toURI(), getName())) {
+				Repository repository = p2.getBridge()
+					.getRepository();
+				RequirementBuilder rb = new RequirementBuilder("org.eclipse.equinox.p2.iu");
+				rb.addDirective("filter",
+					"(&(org.eclipse.equinox.p2.iu=name.njbartlett.eclipse.macbadge)(version>=1.0.0.201110100042)(version<=1.0.0.201110100042))");
+
+				Requirement req = rb.synthetic();
+				Collection<Capability> collection = repository.findProviders(Collections.singleton(req))
+					.get(req);
+				Set<Resource> resources = ResourceUtils.getResources(collection);
+
+				assertThat(resources).as("Expected p2 IU provider for macbadge bundle")
+					.isNotEmpty();
+			}
+		}
+	}
+
+	@Test
 	public void testURI() throws Exception {
 		try (HttpClient client = new HttpClient()) {
 			client.setCache(IO.getFile(tmp, "cache"));

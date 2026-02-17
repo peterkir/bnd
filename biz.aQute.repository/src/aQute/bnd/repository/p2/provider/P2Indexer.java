@@ -367,43 +367,7 @@ class P2Indexer implements Closeable {
 						
 						// Create requirement
 						aQute.bnd.osgi.resource.CapReqBuilder req = new aQute.bnd.osgi.resource.CapReqBuilder(namespace);
-						
-						// Build filter
-						StringBuilder filterBuilder = new StringBuilder();
-						if (namespace.equals("org.eclipse.equinox.p2.iu")) {
-							filterBuilder.append("(");
-							filterBuilder.append(namespace);
-							filterBuilder.append("=");
-							filterBuilder.append(name);
-							filterBuilder.append(")");
-							
-							if (range != null && !range.isEmpty() && !range.equals("0.0.0")) {
-								filterBuilder.insert(0, "(&");
-								filterBuilder.append("(version");
-								filterBuilder.append(range);
-								filterBuilder.append("))");
-							}
-						} else if (namespace.equals("osgi.ee")) {
-							filterBuilder.append("(");
-							filterBuilder.append(namespace);
-							filterBuilder.append("=");
-							filterBuilder.append(name);
-							filterBuilder.append(")");
-						} else {
-							filterBuilder.append("(");
-							filterBuilder.append(namespace);
-							filterBuilder.append("=");
-							filterBuilder.append(name);
-							filterBuilder.append(")");
-						}
-						
-						// Combine with additional filter if present
-						if (filter != null && !filter.isEmpty()) {
-							String combinedFilter = "(&" + filterBuilder.toString() + filter + ")";
-							req.addDirective("filter", combinedFilter);
-						} else {
-							req.addDirective("filter", filterBuilder.toString());
-						}
+						req.addDirective("filter", Product.buildRequirementFilter(namespace, name, range, filter));
 						
 						if (optional) {
 							req.addDirective("resolution", "optional");
@@ -418,12 +382,22 @@ class P2Indexer implements Closeable {
 			return rb.build();
 		}
 
+		addP2IuCapability(rb, artifact);
+
 		// Add content capability for the artifact (bundle or feature JAR)
 		if (file != null) {
 			rb.addFile(file, artifact.uri);
 		}
 
 		return rb.build();
+	}
+
+	private static void addP2IuCapability(ResourceBuilder rb, Artifact artifact) {
+		aQute.bnd.osgi.resource.CapReqBuilder iu = new aQute.bnd.osgi.resource.CapReqBuilder(
+			"org.eclipse.equinox.p2.iu");
+		iu.addAttribute("org.eclipse.equinox.p2.iu", artifact.id);
+		iu.addAttribute("version", artifact.version);
+		rb.addCapability(iu);
 	}
 
 	private ResourcesRepository save(ResourcesRepository repository) throws IOException, Exception {

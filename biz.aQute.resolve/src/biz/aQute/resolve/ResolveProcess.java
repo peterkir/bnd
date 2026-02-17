@@ -434,8 +434,13 @@ public class ResolveProcess {
 	private static void formatPrettyPrinted(Formatter f, String prefix, Requirement req, FilterParser p) {
 		String filter = req.getDirectives()
 			.get("filter");
-
-		Expression prettyExp = p.parse(req);
+		Expression prettyExp;
+		try {
+			prettyExp = p.parse(req);
+		} catch (RuntimeException e) {
+			format(f, prefix, req);
+			return;
+		}
 
 		if (prettyExp instanceof IdentityExpression iexp) {
 			// e.g. "Bundle: biz.aQute.bnd cannot be resolved"

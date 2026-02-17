@@ -1,6 +1,7 @@
 package biz.aQute.resolve;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,11 +25,14 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.osgi.framework.Version;
 import org.osgi.resource.Resource;
+import org.osgi.resource.Requirement;
 import org.osgi.resource.Wire;
 import org.osgi.service.resolver.ResolutionException;
 
 import aQute.bnd.http.HttpClient;
+import aQute.bnd.osgi.resource.CapReqBuilder;
 import aQute.bnd.osgi.Processor;
+import aQute.bnd.osgi.resource.ResourceBuilder;
 import aQute.bnd.repository.osgi.OSGiRepository;
 import aQute.bnd.test.jupiter.InjectTemporaryDirectory;
 import aQute.lib.io.IO;
@@ -57,6 +61,23 @@ public class ResolveProcessTest {
 			}
 			return diff;
 		}
+	}
+
+	@Test
+	public void testFormatMalformedFilterDoesNotThrow() {
+		CapReqBuilder malformedBuilder = new CapReqBuilder("org.eclipse.equinox.p2.iu")
+			.addDirective(REQUIREMENT_FILTER_DIRECTIVE,
+				"(&(org.eclipse.equinox.p2.iu=org.eclipse.e4.ui.di)(version[1.4.100.v20221024-2137,1.4.100.v20221024-2137]))");
+		ResourceBuilder rb = new ResourceBuilder();
+		rb.addRequirement(malformedBuilder);
+		Requirement malformed = rb.build()
+			.getRequirements(null)
+			.get(0);
+		ResolutionException re = new ResolutionException("Malformed filter", null,
+			Collections.singleton(malformed));
+
+		String output = assertDoesNotThrow(() -> ResolveProcess.format(re));
+		assertTrue(output.contains("org.eclipse.equinox.p2.iu"));
 	}
 
 	@Test

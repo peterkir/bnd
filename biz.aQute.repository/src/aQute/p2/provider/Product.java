@@ -14,6 +14,7 @@ import org.w3c.dom.NodeList;
 
 import aQute.bnd.osgi.resource.CapReqBuilder;
 import aQute.bnd.osgi.resource.ResourceBuilder;
+import aQute.bnd.version.VersionRange;
 
 /**
  * Parser for Eclipse product units from P2 content.xml files. This class
@@ -230,49 +231,8 @@ public class Product extends XMLBase {
 			}
 			
 			CapReqBuilder req = new CapReqBuilder(requirement.namespace);
-			
-			// Build filter based on namespace
-			StringBuilder filterBuilder = new StringBuilder();
-			
-			if (requirement.namespace.equals("org.eclipse.equinox.p2.iu")) {
-				// For p2 IU namespace, filter on the IU name
-				filterBuilder.append("(");
-				filterBuilder.append(requirement.namespace);
-				filterBuilder.append("=");
-				filterBuilder.append(requirement.name);
-				filterBuilder.append(")");
-				
-				// Add version range if present
-				if (requirement.range != null && !requirement.range.equals("0.0.0")) {
-					// P2 uses ranges like [1.0.0,1.0.0] for exact versions
-					filterBuilder.insert(0, "(&");
-					filterBuilder.append("(version");
-					filterBuilder.append(requirement.range);
-					filterBuilder.append("))");
-				}
-			} else if (requirement.namespace.equals("osgi.ee")) {
-				// For execution environment, use a simple filter
-				filterBuilder.append("(");
-				filterBuilder.append(requirement.namespace);
-				filterBuilder.append("=");
-				filterBuilder.append(requirement.name);
-				filterBuilder.append(")");
-			} else {
-				// For other namespaces, use the name as filter
-				filterBuilder.append("(");
-				filterBuilder.append(requirement.namespace);
-				filterBuilder.append("=");
-				filterBuilder.append(requirement.name);
-				filterBuilder.append(")");
-			}
-			
-			// Add the filter from the requirement if present
-			if (requirement.filter != null && !requirement.filter.isEmpty()) {
-				String combinedFilter = "(&" + filterBuilder.toString() + requirement.filter + ")";
-				req.addDirective("filter", combinedFilter);
-			} else {
-				req.addDirective("filter", filterBuilder.toString());
-			}
+			req.addDirective("filter",
+				buildRequirementFilter(requirement.namespace, requirement.name, requirement.range, requirement.filter));
 			
 			// Set resolution directive for optional requirements
 			if (requirement.optional) {
@@ -283,6 +243,36 @@ public class Product extends XMLBase {
 		}
 
 		return rb.build();
+	}
+
+	public static String buildRequirementFilter(String namespace, String name, String range, String additionalFilter) {
+		String baseFilter = "(" + namespace + "=" + name + ")";
+		String filter = baseFilter;
+
+		if ("org.eclipse.equinox.p2.iu".equals(namespace)) {
+			String versionFilter = toVersionRangeFilter("version", range);
+			if (versionFilter != null) {
+				filter = "(&" + baseFilter + versionFilter + ")";
+			}
+		}
+
+		if (additionalFilter != null && !additionalFilter.isEmpty()) {
+			filter = "(&" + filter + additionalFilter + ")";
+		}
+
+		return filter;
+	}
+
+	private static String toVersionRangeFilter(String attribute, String range) {
+		if (range == null || range.isEmpty() || "0.0.0".equals(range)) {
+			return null;
+		}
+		if (!VersionRange.isOSGiVersionRange(range)) {
+			return null;
+		}
+		return VersionRange.parseOSGiVersionRange(range)
+			.toFilter(attribute)
+			.toString();
 	}
 
 	public String getId() {
