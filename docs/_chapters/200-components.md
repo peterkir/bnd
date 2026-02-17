@@ -59,7 +59,7 @@ A DS component class must have **either**:
 If your component class has a constructor with parameters but no `@Activate` annotation, bnd will generate an error:
 
 ```
-The DS component class {className} must declare a public no-arg constructor, or a public constructor annotated with @Activate.
+The DS component class {className} must be publicly accessible and have either a public no-arg constructor or a public constructor annotated with @Activate. Non-public classes, including public inner classes enclosed in non-public classes, are not supported.
 ```
 
 **Examples of valid components:**
