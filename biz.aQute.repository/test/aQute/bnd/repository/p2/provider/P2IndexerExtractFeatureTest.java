@@ -1,10 +1,11 @@
 package aQute.bnd.repository.p2.provider;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.io.File;
 import java.net.URI;
 
+import org.assertj.core.api.SoftAssertions;
+import org.assertj.core.api.junit.jupiter.InjectSoftAssertions;
+import org.assertj.core.api.junit.jupiter.SoftAssertionsExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -13,10 +14,6 @@ import aQute.bnd.osgi.Processor;
 import aQute.bnd.test.jupiter.InjectTemporaryDirectory;
 import aQute.p2.packed.Unpack200;
 import aQute.p2.provider.Feature;
-
-import org.assertj.core.api.SoftAssertions;
-import org.assertj.core.api.junit.jupiter.InjectSoftAssertions;
-import org.assertj.core.api.junit.jupiter.SoftAssertionsExtension;
 
 /**
  * Test extractFeatureFromResource functionality in P2Indexer

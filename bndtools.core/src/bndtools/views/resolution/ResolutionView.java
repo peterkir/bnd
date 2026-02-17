@@ -3,6 +3,7 @@ package bndtools.views.resolution;
 import java.io.File;
 import java.text.MessageFormat;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -101,12 +102,16 @@ import aQute.bnd.unmodifiable.Sets;
 import aQute.lib.io.IO;
 import aQute.lib.strings.Strings;
 import aQute.p2.provider.Feature;
+import aQute.p2.provider.Product;
 import bndtools.Plugin;
 import bndtools.editor.common.HelpButtons;
 import bndtools.model.repo.IncludedBundleItem;
 import bndtools.model.repo.IncludedFeatureItem;
+import bndtools.model.repo.ProductFolderNode;
+import bndtools.model.repo.ProductRequiredItem;
 import bndtools.model.repo.RepositoryBundle;
 import bndtools.model.repo.RepositoryFeature;
+import bndtools.model.repo.RepositoryProduct;
 import bndtools.model.repo.RepositoryResourceElement;
 import bndtools.model.resolution.CapReqMapContentProvider;
 import bndtools.model.resolution.CapabilityLabelProvider;
@@ -621,41 +626,34 @@ public class ResolutionView extends ViewPart implements ISelectionListener, IRes
 
 			// Check RepositoryFeature BEFORE trying to adapt to File, since
 			// features are synthetic entries without file backing
-			if (element instanceof RepositoryFeature) {
-				// For features, load all included bundles
+			if (element instanceof RepositoryProduct product) {
+				addProductLoaders(product, result);
+			} else if (element instanceof ProductFolderNode folder) {
+				for (Object child : folder.getChildren()) {
+					if (child instanceof ProductRequiredItem productRequiredItem) {
+						addProductRequiredItemLoader(folder.getParent().getRepo(), productRequiredItem, result);
+					}
+				}
+			} else if (element instanceof ProductRequiredItem productRequiredItem) {
+				addProductRequiredItemLoader(productRequiredItem.getParent().getParent().getRepo(), productRequiredItem,
+					result);
+			} else if (element instanceof RepositoryFeature) {
+				// For features, load feature resources (including nested included features)
 				RepositoryFeature feature = (RepositoryFeature) element;
 				try {
-					feature.getFeature().parse();
-					for (aQute.p2.provider.Feature.Plugin plugin : feature.getFeature().getPlugins()) {
-						RepositoryBundle bundle = new RepositoryBundle(feature.getRepo(), plugin.id);
-						Resource resource = bundle.getResource();
-						if (resource != null) {
-							result.add(new ResourceCapReqLoader(resource));
-						}
-					}
+					addFeatureLoaders(feature.getRepo(), feature.getFeature()
+						.getId(), feature.getFeature()
+							.getVersion(), result);
 				} catch (Exception e) {
 					// Ignore parse errors
 				}
 			} else if (element instanceof IncludedFeatureItem) {
-				// For included feature items, load the referenced feature's bundles
+				// For included feature items, load the referenced feature resources
 				IncludedFeatureItem featureItem = (IncludedFeatureItem) element;
 				RepositoryPlugin repo = featureItem.getParent().getParent().getRepo();
 				Feature.Includes includes = featureItem.getIncludes();
 				try {
-					if (repo instanceof FeatureProvider) {
-						Object featureObj = ((FeatureProvider) repo).getFeature(includes.id, includes.version);
-						if (featureObj instanceof Feature) {
-							Feature feature = (Feature) featureObj;
-							feature.parse();
-							for (Feature.Plugin plugin : feature.getPlugins()) {
-								RepositoryBundle bundle = new RepositoryBundle(repo, plugin.id);
-								Resource resource = bundle.getResource();
-								if (resource != null) {
-									result.add(new ResourceCapReqLoader(resource));
-								}
-							}
-						}
-					}
+					addFeatureLoaders(repo, includes.id, includes.version, result);
 				} catch (Exception e) {
 					// Ignore resolution errors
 				}
@@ -666,11 +664,7 @@ public class ResolutionView extends ViewPart implements ISelectionListener, IRes
 				RepositoryPlugin repo = bundleItem.getParent().getParent().getRepo();
 				String bundleId = bundleItem.getPlugin().id;
 				try {
-					RepositoryBundle bundle = new RepositoryBundle(repo, bundleId);
-					Resource resource = bundle.getResource();
-					if (resource != null) {
-						loader = new ResourceCapReqLoader(resource);
-					}
+					addBundleLoader(repo, bundleId, result);
 				} catch (Exception e) {
 					// Ignore resolution errors
 				}
@@ -709,6 +703,213 @@ public class ResolutionView extends ViewPart implements ISelectionListener, IRes
 		}
 
 		return result;
+	}
+
+	private void addProductLoaders(RepositoryProduct product, Set<CapReqLoader> result) {
+		int previousSize = result.size();
+		RepositoryPlugin repo = product.getRepo();
+		Product p2Product = product.getProduct();
+		for (Product.Required required : p2Product.getRequires()) {
+			addProductRequiredLoader(repo, required, result);
+		}
+		if (result.size() == previousSize) {
+			try {
+				result.add(new ResourceCapReqLoader(p2Product.toResource()));
+			} catch (Exception e) {
+				// Ignore product conversion errors
+			}
+		}
+	}
+
+	private void addProductRequiredItemLoader(RepositoryPlugin repo, ProductRequiredItem item, Set<CapReqLoader> result) {
+		addProductRequiredLoader(repo, item.getRequired(), result);
+	}
+
+	private void addProductRequiredLoader(RepositoryPlugin repo, Product.Required required, Set<CapReqLoader> result) {
+		try {
+			if (isProductFeatureRequirement(required)) {
+				int previousSize = result.size();
+				String lookupVersion = toLookupVersion(required.range);
+				addFeatureLoaders(repo, required.name, lookupVersion, result);
+				if (result.size() == previousSize) {
+					addRequirementLoaders(repo, required.namespace, required.name, result);
+					if (result.size() == previousSize && required.name != null
+						&& required.name.endsWith(".feature.group")) {
+						String strippedId = required.name.substring(0,
+							required.name.length() - ".feature.group".length());
+						addRequirementLoaders(repo, required.namespace, strippedId, result);
+					}
+				}
+			} else if (isProductBundleRequirement(required)) {
+				int previousSize = result.size();
+				addBundleLoader(repo, required.name, result);
+				if (result.size() == previousSize) {
+					addRequirementLoaders(repo, required.namespace, required.name, result);
+				}
+			}
+		} catch (Exception e) {
+			// Ignore individual resolution failures to keep partial product results
+		}
+	}
+
+	private void addRequirementLoaders(RepositoryPlugin repo, String namespace, String name, Set<CapReqLoader> result) {
+		if (!(repo instanceof Repository) || namespace == null || name == null || name.isBlank()) {
+			return;
+		}
+		try {
+			CapReqBuilder builder = new CapReqBuilder(namespace);
+			builder.filter("(" + namespace + "=" + name + ")");
+			Requirement requirement = builder.buildSyntheticRequirement();
+			Map<Requirement, Collection<Capability>> providers = ((Repository) repo)
+				.findProviders(Collections.singleton(requirement));
+			for (Collection<Capability> capabilities : providers.values()) {
+				for (Capability capability : capabilities) {
+					Resource resource = capability.getResource();
+					if (resource != null) {
+						result.add(new ResourceCapReqLoader(resource));
+					}
+				}
+			}
+		} catch (Exception e) {
+			// Ignore requirement fallback resolution errors
+		}
+	}
+
+	private void addFeatureLoaders(RepositoryPlugin repo, String featureId, String version, Set<CapReqLoader> result) {
+		addFeatureLoaders(repo, featureId, version, result, new HashSet<>());
+	}
+
+	private void addFeatureLoaders(RepositoryPlugin repo, String featureId, String version, Set<CapReqLoader> result,
+		Set<String> visitedFeatures) {
+		if (!(repo instanceof FeatureProvider) || featureId == null) {
+			return;
+		}
+		String normalizedVersion = normalizeLookupVersion(version);
+		FeatureProvider provider = (FeatureProvider) repo;
+
+		Feature feature = getFeature(provider, featureId, normalizedVersion);
+		if (feature == null) {
+			feature = getFeature(provider, featureId, null);
+		}
+		if (feature == null && featureId.endsWith(".feature.group")) {
+			String strippedId = featureId.substring(0, featureId.length() - ".feature.group".length());
+			feature = getFeature(provider, strippedId, normalizedVersion);
+			if (feature == null) {
+				feature = getFeature(provider, strippedId, null);
+			}
+		}
+		if (feature == null) {
+			return;
+		}
+
+		String featureKey = feature.getId() + "@" + normalizeLookupVersion(feature.getVersion());
+		if (!visitedFeatures.add(featureKey)) {
+			return;
+		}
+
+		try {
+			Resource featureResource = feature.toResource();
+			if (featureResource != null) {
+				result.add(new ResourceCapReqLoader(featureResource));
+			}
+		} catch (Exception e) {
+			// Ignore feature toResource conversion errors
+		}
+
+		try {
+			feature.parse();
+			for (Feature.Includes includes : feature.getIncludes()) {
+				addFeatureLoaders(repo, includes.id, includes.version, result, visitedFeatures);
+			}
+		} catch (Exception e) {
+			// Ignore feature parsing errors
+		}
+	}
+
+	private Feature getFeature(FeatureProvider provider, String featureId, String version) {
+		try {
+			Object featureObj = provider.getFeature(featureId, version);
+			if (featureObj instanceof Feature feature) {
+				return feature;
+			}
+		} catch (Exception e) {
+			// Ignore feature resolution errors
+		}
+		return null;
+	}
+
+	private void addBundleLoader(RepositoryPlugin repo, String bundleId, Set<CapReqLoader> result) {
+		if (bundleId == null) {
+			return;
+		}
+		try {
+			RepositoryBundle bundle = new RepositoryBundle(repo, bundleId);
+			Resource resource = bundle.getResource();
+			if (resource != null) {
+				result.add(new ResourceCapReqLoader(resource));
+			}
+		} catch (Exception e) {
+			// Ignore unresolved bundle references inside product/feature containments
+		}
+	}
+
+	static boolean isProductFeatureRequirement(Product.Required required) {
+		return required != null && "org.eclipse.equinox.p2.iu".equals(required.namespace) && required.name != null
+			&& required.name.endsWith(".feature.group");
+	}
+
+	static boolean isProductBundleRequirement(Product.Required required) {
+		if (required == null || required.name == null) {
+			return false;
+		}
+		if ("osgi.bundle".equals(required.namespace)) {
+			return true;
+		}
+		return "org.eclipse.equinox.p2.iu".equals(required.namespace)
+			&& !required.name.endsWith(".feature.group");
+	}
+
+	private static String toLookupVersion(String versionOrRange) {
+		if (versionOrRange == null) {
+			return null;
+		}
+		String value = versionOrRange.trim();
+		if (value.isEmpty()) {
+			return null;
+		}
+		if (!value.contains(",") && !value.startsWith("(") && !value.startsWith("[")) {
+			return value;
+		}
+		if (value.startsWith("[") && value.endsWith("]") && value.contains(",")) {
+			String[] bounds = value.substring(1, value.length() - 1)
+				.split(",", 2);
+			if (bounds.length == 2) {
+				String lower = bounds[0].trim();
+				String upper = bounds[1].trim();
+				if (!lower.isEmpty() && lower.equals(upper)) {
+					return lower;
+				}
+			}
+		}
+		if ((value.startsWith("[") || value.startsWith("(")) && value.contains(",")) {
+			String lower = value.substring(1, value.indexOf(','))
+				.trim();
+			if (!lower.isEmpty()) {
+				return lower;
+			}
+		}
+		return null;
+	}
+
+	private static String normalizeLookupVersion(String version) {
+		if (version == null) {
+			return null;
+		}
+		String normalized = version.trim();
+		if (normalized.isEmpty() || "0.0.0".equals(normalized)) {
+			return null;
+		}
+		return normalized;
 	}
 
 	void executeAnalysis() {

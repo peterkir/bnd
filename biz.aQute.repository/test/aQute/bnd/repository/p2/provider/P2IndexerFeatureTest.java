@@ -1,11 +1,12 @@
 package aQute.bnd.repository.p2.provider;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.io.File;
 import java.net.URI;
 import java.util.List;
 
+import org.assertj.core.api.SoftAssertions;
+import org.assertj.core.api.junit.jupiter.InjectSoftAssertions;
+import org.assertj.core.api.junit.jupiter.SoftAssertionsExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.namespace.IdentityNamespace;
@@ -16,10 +17,6 @@ import aQute.bnd.http.HttpClient;
 import aQute.bnd.osgi.Processor;
 import aQute.bnd.test.jupiter.InjectTemporaryDirectory;
 import aQute.p2.packed.Unpack200;
-
-import org.assertj.core.api.SoftAssertions;
-import org.assertj.core.api.junit.jupiter.InjectSoftAssertions;
-import org.assertj.core.api.junit.jupiter.SoftAssertionsExtension;
 
 /**
  * Test that P2Indexer correctly processes Eclipse features and includes them

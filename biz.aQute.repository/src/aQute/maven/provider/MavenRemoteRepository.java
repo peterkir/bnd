@@ -14,11 +14,11 @@ import org.osgi.util.promise.Promise;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import aQute.bnd.exceptions.Exceptions;
 import aQute.bnd.http.HttpClient;
 import aQute.bnd.http.HttpRequestException;
 import aQute.bnd.service.url.State;
 import aQute.bnd.service.url.TaggedData;
-import aQute.bnd.exceptions.Exceptions;
 import aQute.libg.cryptography.MD5;
 import aQute.libg.cryptography.SHA1;
 import aQute.libg.uri.URIUtil;
