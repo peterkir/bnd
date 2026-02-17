@@ -183,7 +183,7 @@ public class DSAnnotationReader extends ClassDataCollector {
 			DeclarativeServicesAnnotationError details = new DeclarativeServicesAnnotationError(
 				implementationClass.getFQN(), null, null, ErrorType.INVALID_COMPONENT_TYPE);
 			details.addError(analyzer,
-				"[%s] The DS component class %s must declare a public no-arg constructor, or a public constructor annotated with @Activate.",
+				"[%s] The DS component class %s must be publicly accessible and have either a public no-arg constructor or a public constructor annotated with @Activate. Non-public classes, including public inner classes enclosed in non-public classes, are not supported.",
 				details.location(), implementationClass.getFQN());
 		}
 
