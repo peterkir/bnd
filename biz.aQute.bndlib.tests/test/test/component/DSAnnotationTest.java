@@ -4586,7 +4586,7 @@ public class DSAnnotationTest {
 			// expect error because class has no noArg constructor and
 			if (!b.check(
 				Pattern.quote(
-					"test.component.DSAnnotationTest$ConstructorInjectionMissingDefaultNoArgConstructor] The DS component class test.component.DSAnnotationTest$ConstructorInjectionMissingDefaultNoArgConstructor must declare a public no-arg constructor, or a public constructor annotated with @Activate.")))
+					"test.component.DSAnnotationTest$ConstructorInjectionMissingDefaultNoArgConstructor] The DS component class test.component.DSAnnotationTest$ConstructorInjectionMissingDefaultNoArgConstructor must be publicly accessible and have either a public no-arg constructor or a public constructor annotated with @Activate. Non-public classes, including public inner classes enclosed in non-public classes, are not supported.")))
 				fail();
 		}
 	}
@@ -4605,7 +4605,7 @@ public class DSAnnotationTest {
 			// cannot be instantiated
 			if (!b.check(
 				Pattern.quote(
-					"The DS component class test.component.constructorinjection.ConstructorInjectionErrorOnNonStaticInnerClassComponent$ConstructorInjectionErrorOnNonStaticInnerClassComponentInner must declare a public no-arg constructor, or a public constructor annotated with @Activate")))
+					"The DS component class test.component.constructorinjection.ConstructorInjectionErrorOnNonStaticInnerClassComponent$ConstructorInjectionErrorOnNonStaticInnerClassComponentInner must be publicly accessible and have either a public no-arg constructor or a public constructor annotated with @Activate. Non-public classes, including public inner classes enclosed in non-public classes, are not supported.")))
 				fail();
 		}
 	}
