@@ -46,6 +46,82 @@ function activeRunFile(): string | undefined {
     return vscode.workspace.asRelativePath(uri);
 }
 
+interface RunFileItem extends vscode.QuickPickItem {
+    /** Workspace-relative path, or '' to mean "current project default". */
+    file: string;
+}
+
+/**
+ * Shows a QuickPick of all `.bndrun` files in the workspace.
+ * When the active editor is a `.bnd`/`.bndrun` file that file is floated to
+ * the top of the list and pre-focused so the user can confirm with Enter.
+ *
+ * @param title         Title shown in the picker header.
+ * @param allowDefault  When true, a "(current project)" entry is prepended.
+ * @returns The chosen relative file path, `''` for the current-project entry,
+ *          or `undefined` if the user cancelled.
+ */
+async function pickBndrunFile(title: string, allowDefault: boolean): Promise<string | undefined> {
+    const found = await vscode.workspace.findFiles('**/*.bndrun', '**/node_modules/**');
+    const active = activeRunFile();
+
+    const items: RunFileItem[] = [];
+
+    if (allowDefault) {
+        items.push({
+            label: '$(folder) (current project)',
+            description: 'Use the default bndrun of the current project',
+            file: '',
+        });
+    }
+
+    // Active file first, rest sorted alphabetically
+    const sorted = [...found].sort((a, b) => {
+        const ra = vscode.workspace.asRelativePath(a);
+        const rb = vscode.workspace.asRelativePath(b);
+        if (ra === active) { return -1; }
+        if (rb === active) { return 1; }
+        return ra.localeCompare(rb);
+    });
+
+    for (const f of sorted) {
+        const rel = vscode.workspace.asRelativePath(f);
+        items.push({
+            label: rel,
+            description: rel === active ? '$(edit) currently open' : undefined,
+            file: rel,
+        });
+    }
+
+    if (items.length === 0) {
+        return undefined;
+    }
+
+    return new Promise(resolve => {
+        const qp = vscode.window.createQuickPick<RunFileItem>();
+        qp.title = title;
+        qp.placeholder = 'Select a .bndrun file';
+        qp.items = items;
+
+        // Pre-focus the active file so Enter runs it immediately
+        if (active) {
+            const activeItem = items.find(i => i.file === active);
+            if (activeItem) { qp.activeItems = [activeItem]; }
+        }
+
+        qp.onDidAccept(() => {
+            const selected = qp.selectedItems[0];
+            resolve(selected?.file);
+            qp.dispose();
+        });
+        qp.onDidHide(() => {
+            resolve(undefined);
+            qp.dispose();
+        });
+        qp.show();
+    });
+}
+
 // ─── Individual Command Handlers ──────────────────────────────────────────────
 
 /** bnd build [-t] [-w] */
@@ -64,32 +140,14 @@ async function cmdBuild(): Promise<void> {
 
 /** bnd run [bndrun] */
 async function cmdRun(): Promise<void> {
-    // If a .bndrun (or .bnd) file is already open, use it immediately.
-    const active = activeRunFile();
-    if (active) {
-        runInTerminal(`run ${active}`);
-        return;
-    }
-
     const files = await vscode.workspace.findFiles('**/*.bndrun', '**/node_modules/**');
     if (files.length === 0) {
         runInTerminal('run');
         return;
     }
-    const items = [
-        { label: '(current project)', description: 'Use default bndrun of the current project', file: '' },
-        ...files.map(f => ({
-            label: vscode.workspace.asRelativePath(f),
-            description: f.fsPath,
-            file: vscode.workspace.asRelativePath(f),
-        })),
-    ];
-    const choice = await vscode.window.showQuickPick(items, {
-        title: 'Bnd: Run',
-        placeHolder: 'Select a .bndrun file to run',
-    });
-    if (!choice) { return; }
-    runInTerminal(choice.file ? `run ${choice.file}` : 'run');
+    const file = await pickBndrunFile('Bnd: Run', true);
+    if (file === undefined) { return; }
+    runInTerminal(file ? `run ${file}` : 'run');
 }
 
 /** bnd test */
@@ -97,9 +155,16 @@ async function cmdTest(): Promise<void> {
     runInTerminal('test');
 }
 
-/** bnd runtests */
+/** bnd runtests [bndrun] */
 async function cmdRunTests(): Promise<void> {
-    runInTerminal('runtests');
+    const files = await vscode.workspace.findFiles('**/*.bndrun', '**/node_modules/**');
+    if (files.length === 0) {
+        runInTerminal('runtests');
+        return;
+    }
+    const file = await pickBndrunFile('Bnd: Run OSGi Tests', true);
+    if (file === undefined) { return; }
+    runInTerminal(file ? `runtests ${file}` : 'runtests');
 }
 
 /** bnd resolve [bndrun...] */
