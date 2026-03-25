@@ -32,6 +32,20 @@ function runInTerminal(args: string): void {
     term.sendText(`${bndExec()} ${args}`);
 }
 
+// ─── Active-editor helper ─────────────────────────────────────────────────────
+
+/**
+ * If the currently active editor is a `.bnd` or `.bndrun` file, returns its
+ * workspace-relative path so it can be passed directly to the CLI.
+ * Returns `undefined` when no such file is active.
+ */
+function activeRunFile(): string | undefined {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    if (!uri || uri.scheme !== 'file') { return undefined; }
+    if (!uri.fsPath.endsWith('.bndrun') && !uri.fsPath.endsWith('.bnd')) { return undefined; }
+    return vscode.workspace.asRelativePath(uri);
+}
+
 // ─── Individual Command Handlers ──────────────────────────────────────────────
 
 /** bnd build [-t] [-w] */
@@ -50,6 +64,13 @@ async function cmdBuild(): Promise<void> {
 
 /** bnd run [bndrun] */
 async function cmdRun(): Promise<void> {
+    // If a .bndrun (or .bnd) file is already open, use it immediately.
+    const active = activeRunFile();
+    if (active) {
+        runInTerminal(`run ${active}`);
+        return;
+    }
+
     const files = await vscode.workspace.findFiles('**/*.bndrun', '**/node_modules/**');
     if (files.length === 0) {
         runInTerminal('run');
