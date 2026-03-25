@@ -62,11 +62,61 @@ client/src/extension.ts  ←── IPC ───►  server/src/server.ts
    registers the client)                   all LSP logic)
 ```
 
+## Integrated bnd CLI Commands
+
+All commands are available in the **Command Palette** (`Ctrl+Shift+P`) under the `Bnd:` prefix.
+
+| Command | Description |
+|---|---|
+| `Bnd: Build Project` | `bnd build` — build with mode selection (normal / test / watch) |
+| `Bnd: Run` | `bnd run` — pick a `.bndrun` file or use the current project |
+| `Bnd: Test Project` | `bnd test` |
+| `Bnd: Run OSGi Tests` | `bnd runtests` |
+| `Bnd: Resolve (.bndrun)` | `bnd resolve` — multi-select `.bndrun` files |
+| `Bnd: Clean Project` | `bnd clean` |
+| `Bnd: Baseline Check` | `bnd baseline` |
+| `Bnd: Verify JARs` | `bnd verify` — pick generated JARs |
+| `Bnd: Print Bundle Info` | `bnd print` — choose view mode and JAR |
+| `Bnd: Diff Bundles` | `bnd diff` — prompts for newer + older JAR |
+| `Bnd: Wrap JAR as OSGi Bundle` | `bnd wrap` |
+| `Bnd: Export (.bndrun)` | `bnd export` |
+| `Bnd: Release Project` | `bnd release` (with confirmation) |
+| `Bnd: Show Project Properties` | `bnd properties` |
+| `Bnd: Show Project Info` | `bnd info` |
+| `Bnd: Show bnd Version` | `bnd version` |
+| `Bnd: Evaluate Macro Expression` | `bnd macro` — enter a macro expression interactively |
+| `Bnd: Repository Commands` | `bnd repo` sub-command picker |
+| `Bnd: Show CLI Reference` | Opens a searchable webview panel with all 77 bnd CLI commands |
+
+All commands run in VS Code's integrated terminal named **"bnd"**.
+
+### Configuration
+
+Set the `bnd.cli.executable` workspace or user setting to point to your bnd installation:
+
+```jsonc
+// settings.json
+{
+    // If bnd is on your PATH (e.g. brew install bnd):
+    "bnd.cli.executable": "bnd",
+
+    // Or run it as an executable JAR:
+    "bnd.cli.executable": "java -jar /path/to/biz.aQute.bnd.jar"
+}
+```
+
+### CLI Reference Panel
+
+Run **Bnd: Show CLI Reference** (`Ctrl+Shift+P → Bnd: Show CLI Reference`) to open a searchable panel
+showing all 77 bnd CLI sub-commands with their full option lists and examples from the official docs.
+
+![CLI Reference panel showing searchable command list]
+
 ## Installation
 
 ### From VSIX
 
-1. Download or build `vscode-bnd-0.2.0.vsix`.
+1. Download or build `vscode-bnd-0.3.0.vsix`.
 2. In VS Code open the Extensions view (`Ctrl+Shift+X`).
 3. Click the `...` menu → **Install from VSIX…** and select the file.
 
@@ -80,7 +130,7 @@ npm install              # install client deps
 npm install --prefix server  # install server deps
 npm run compile:all      # compile client + server TypeScript
 npx @vscode/vsce package --allow-missing-repository --no-git-tag-version
-# Produces vscode-bnd-0.2.0.vsix
+# Produces vscode-bnd-0.3.0.vsix
 ```
 
 ## Usage

@@ -2,7 +2,7 @@
 
 ## Quick Install (from pre-built VSIX)
 
-A pre-built extension package (`vscode-bnd-0.2.0.vsix`) is included in this directory.
+A pre-built extension package (`vscode-bnd-0.3.0.vsix`) is included in this directory.
 
 ### Option A: Via VS Code UI
 
@@ -10,21 +10,21 @@ A pre-built extension package (`vscode-bnd-0.2.0.vsix`) is included in this dire
 2. Open the Extensions view with `Ctrl+Shift+X` (Windows/Linux) or `Cmd+Shift+X` (macOS).
 3. Click the `...` (More Actions) menu at the top-right of the Extensions panel.
 4. Select **Install from VSIX…**
-5. Navigate to this directory and select `vscode-bnd-0.2.0.vsix`.
+5. Navigate to this directory and select `vscode-bnd-0.3.0.vsix`.
 6. Click **Install**.
 7. Reload VS Code if prompted.
 
 ### Option B: Via Command Line
 
 ```bash
-code --install-extension /path/to/vscode-bnd/vscode-bnd-0.2.0.vsix
+code --install-extension /path/to/vscode-bnd/vscode-bnd-0.3.0.vsix
 ```
 
 Replace `/path/to/vscode-bnd/` with the actual path to this directory, e.g.:
 
 ```bash
 # From the root of the bnd workspace:
-code --install-extension vscode-bnd/vscode-bnd-0.2.0.vsix
+code --install-extension vscode-bnd/vscode-bnd-0.3.0.vsix
 ```
 
 ## Build from Source
@@ -55,7 +55,7 @@ npm run compile:all
 npx @vscode/vsce package --allow-missing-repository --no-git-tag-version
 ```
 
-This produces `vscode-bnd-0.2.0.vsix` in the current directory.  
+This produces `vscode-bnd-0.3.0.vsix` in the current directory.  
 Install it using either option above.
 
 ## Verifying the Installation

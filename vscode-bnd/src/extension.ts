@@ -6,6 +6,7 @@ import {
     ServerOptions,
     TransportKind,
 } from 'vscode-languageclient/node';
+import { registerCliCommands } from './bndCliCommands';
 
 let client: LanguageClient;
 
@@ -47,6 +48,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
     client.start();
     context.subscriptions.push({ dispose: () => client.stop() });
+
+    // Register bnd CLI commands
+    registerCliCommands(context);
 }
 
 export function deactivate(): Thenable<void> | undefined {
