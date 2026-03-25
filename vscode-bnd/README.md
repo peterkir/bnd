@@ -31,7 +31,7 @@ Trigger completions with `Ctrl+Space` (or automatically on `-`, `$`, `{`, `:`):
   - `${bsn}`, `${version}`, `${range}`, `${repo}`, `${githead}`, `${tstamp}`
   - `${filter}`, `${filterout}`, `${replace}`, `${sort}`, `${join}`
   - and many more…
-- **44 OSGi headers and bnd pseudo-headers** – Standard manifest keys with documentation.
+- **48 OSGi headers and bnd pseudo-headers** – Standard manifest keys with documentation.
 
 All completion items include:
 - A **detail** line showing the full syntax signature.
