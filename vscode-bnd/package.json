@@ -1,8 +1,8 @@
 {
   "name": "vscode-bnd",
   "displayName": "Bnd and Bndrun Support",
-  "description": "Language support for bnd and bndrun files including syntax highlighting and IntelliSense",
-  "version": "0.1.0",
+  "description": "Language support for bnd and bndrun files — syntax highlighting, IntelliSense completions and hover docs via Language Server Protocol",
+  "version": "0.2.0",
   "publisher": "bndtools",
   "engines": {
     "vscode": "^1.75.0"
@@ -39,10 +39,16 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "vscode:prepublish": "npm run compile:all",
+    "compile": "tsc -p ./tsconfig.json",
+    "compile:server": "tsc -p ./server/tsconfig.json",
+    "compile:all": "npm run compile && npm run compile:server",
     "watch": "tsc -watch -p ./",
+    "watch:server": "tsc -watch -p ./server/",
     "package": "vsce package --allow-missing-repository --no-git-tag-version"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",

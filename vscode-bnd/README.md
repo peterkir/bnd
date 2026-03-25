@@ -11,7 +11,7 @@ Full TextMate grammar covering:
 - **Instructions** – Lines starting with `-keyword:` (e.g., `-buildpath:`, `-runbundles:`, `-privatepackage:`) highlighted as control keywords.
 - **OSGi Headers** – Standard manifest headers (`Bundle-SymbolicName:`, `Export-Package:`, `Import-Package:`, etc.) highlighted as storage types.
 - **Properties** – Lowercase key-value properties highlighted as variables.
-- **Macros** – `${macroname}` expressions, with the macro name highlighted as a function.
+- **Macros** – `${macroname}` expressions, with the macro name highlighted as a function. Nested macros are also handled.
 - **Version ranges** – `[1.0,2.0)` and `(1.0,2.0]` highlighted as numeric constants.
 - **String literals** – Single and double-quoted strings.
 - **Directives** – `key:=value` attribute/directive syntax.
@@ -20,49 +20,68 @@ Full TextMate grammar covering:
 
 ### IntelliSense Completions
 
-Trigger completions with `Ctrl+Space` (or automatically on `-`, `$`, `{`, `:`):
+Trigger completions with `Ctrl+Space` (or automatically on `-`, `$`, `{`, `:`).
+All completion items are pre-filled with **real examples from the bnd documentation**.
 
-- **153 bnd instructions** – All documented `-instruction:` entries with detail and documentation, e.g.:
-  - `-buildpath`, `-runbundles`, `-runrequires`, `-runfw`, `-privatepackage`, `-exportcontents`
-  - `-dsannotations`, `-metatypeannotations`, `-cdiannotations`
-  - `-resolve`, `-standalone`, `-runee`, `-runvm`, `-runproperties`
-  - and many more…
-- **138 bnd macros** – All documented `${macro}` entries when cursor is inside `${...}`:
-  - `${bsn}`, `${version}`, `${range}`, `${repo}`, `${githead}`, `${tstamp}`
-  - `${filter}`, `${filterout}`, `${replace}`, `${sort}`, `${join}`
-  - and many more…
-- **48 OSGi headers and bnd pseudo-headers** – Standard manifest keys with documentation.
-
-All completion items include:
-- A **detail** line showing the full syntax signature.
-- **Documentation** from the official bnd docs rendered as Markdown.
-- **Snippet insert text** placing the cursor after `: ` for easy value entry.
+- **153 bnd instructions** – e.g.:
+  - `-buildpath: osgi;version=4.1`
+  - `-runbundles: org.apache.felix.framework;version='[7,8)'`
+  - `-dsannotations: *`, `-runee: JavaSE-17`, `-standalone: ...`
+- **138 bnd macros** – triggered when the cursor is inside `${...}`:
+  - `${bsn}`, `${version}`, `${range;[==,+);${@}}`, `${repo;bsns}`
+  - `${filter;<list>;<regex>}`, `${replace;<list>;<regex>;<replacement>}`
+  - `${tstamp;yyyy-MM-dd}`, `${githead}`, `${system;git describe}`
+- **48 OSGi headers and bnd pseudo-headers** – e.g.:
+  - `Bundle-SymbolicName: com.example.bundle`
+  - `Export-Package: com.example.api;version=1.0`
+  - `Require-Capability: osgi.identity; filter:='...'`
 
 ### Hover Documentation
 
 Hover over any instruction keyword, OSGi header, or macro name to see:
 - The full syntax signature (bold).
 - A documentation summary from the bnd reference docs.
+- An **example** from the official bnd documentation, shown in a `bnd` code block.
+
+### Language Server Protocol (LSP)
+
+This extension implements the [Language Server Protocol](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide).  
+The language server runs in a **separate Node.js process**, which means:
+
+- It will never block or crash VS Code's UI thread.
+- The server can be reused by any LSP-compatible editor (Neovim, Emacs, Helix, …) with a small adapter.
+- Adding new capabilities (diagnostics, formatting, go-to-definition) only requires changes in `server/src/server.ts`.
+
+**Architecture:**
+
+```
+VS Code (Extension Host)                Language Server (separate process)
+─────────────────────────               ────────────────────────────────
+client/src/extension.ts  ←── IPC ───►  server/src/server.ts
+  (starts the server,                     (completion, hover,
+   registers the client)                   all LSP logic)
+```
 
 ## Installation
 
 ### From VSIX
 
-1. Download the `.vsix` file.
+1. Download or build `vscode-bnd-0.2.0.vsix`.
 2. In VS Code open the Extensions view (`Ctrl+Shift+X`).
 3. Click the `...` menu → **Install from VSIX…** and select the file.
+
+See [INSTALL.md](INSTALL.md) for full instructions including command-line install.
 
 ### Build from Source
 
 ```bash
 cd vscode-bnd
-npm install
-npm run compile
+npm install              # install client deps
+npm install --prefix server  # install server deps
+npm run compile:all      # compile client + server TypeScript
 npx @vscode/vsce package --allow-missing-repository --no-git-tag-version
-# Produces vscode-bnd-0.1.0.vsix
+# Produces vscode-bnd-0.2.0.vsix
 ```
-
-Then install the generated `.vsix` as above.
 
 ## Usage
 
