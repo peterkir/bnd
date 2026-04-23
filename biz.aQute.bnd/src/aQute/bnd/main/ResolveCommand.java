@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.osgi.resource.Requirement;
 import org.osgi.resource.Resource;
@@ -297,9 +298,12 @@ public class ResolveCommand extends Processor {
 							bndrun.setProperty("-runorder", options.runorder()
 								.toString());
 
+						long startNanos = System.nanoTime();
 						RunResolution resolution = bndrun.resolve(quiet(options.quiet()));
+						long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
 
 						bnd.out.println();
+						bnd.out.printf("Resolved %s in %d ms%n", f.getName(), elapsedMs);
 
 						if (bndrun.isOk()) {
 

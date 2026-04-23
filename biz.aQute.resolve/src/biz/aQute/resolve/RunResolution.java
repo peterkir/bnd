@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -111,6 +112,7 @@ public class RunResolution {
 			callbacks = Collections.emptyList();
 		ResolverLogger logger = resolverLogger == null ? ResolverLogger.newLogger(actualProperties, false)
 			: resolverLogger;
+		long startNanos = System.nanoTime();
 		try {
 			try {
 				ResolveProcess resolve = new ResolveProcess();
@@ -124,6 +126,8 @@ public class RunResolution {
 				return new RunResolution(project, actualProperties, e, logger.getLog());
 			}
 		} finally {
+			long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+			RunResolution.logger.info("Resolve of {} completed in {} ms", project, elapsedMs);
 			if (resolverLogger == null) {
 				logger.close();
 			}

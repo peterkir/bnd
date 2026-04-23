@@ -83,7 +83,16 @@ public class ResolveProcess {
 		// 1. Resolve initial requirements
 		Map<Resource, List<Wire>> wirings;
 		try {
+			long initStartNanos = System.nanoTime();
+			try {
+				rc.init();
+			} catch (RuntimeException re) {
+				throw new ResolutionException(re.getMessage(), re, Collections.emptyList());
+			}
+			logElapsedMs(log, "Context init", initStartNanos);
+			long resolveStartNanos = System.nanoTime();
 			wirings = resolver.resolve(rc);
+			logElapsedMs(log, "First resolve pass", resolveStartNanos);
 		} catch (ResolutionException re) {
 			throw augment(rc, re);
 		}
@@ -188,7 +197,9 @@ public class ResolveProcess {
 
 		rc2.addCallbacks(callbacks);
 		try {
+			long optionalStartNanos = System.nanoTime();
 			wirings = resolver.resolve(rc2);
+			logElapsedMs(log, "Second resolve pass (optional)", optionalStartNanos);
 		} catch (ResolutionException re) {
 			throw augment(rc2, re);
 		}
@@ -839,6 +850,12 @@ public class ResolveProcess {
 
 	public Map<Resource, List<Wire>> getOptionalWiring() {
 		return Collections.unmodifiableMap(optional);
+	}
+
+	private static void logElapsedMs(LogService log, String phase, long startNanos) {
+		log.log(LogService.LOG_INFO,
+			String.format("%s completed in %d ms", phase,
+				TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos)));
 	}
 
 }
