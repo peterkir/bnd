@@ -123,7 +123,7 @@ public class EclipseManifest {
 
 			Parameters exports = manifest.getExportContents();
 			exports.putAll(manifest.getExportPackage());
-			Parameters privates = new Parameters(sourcePackages);
+			Parameters privates = new Parameters(String.join(",", sourcePackages));
 			privates.keySet()
 				.removeAll(exports.keySet());
 			privates.keySet()
