@@ -2987,4 +2987,24 @@ public class Processor extends Domain implements Reporter, Registry, Constants, 
 		}
 		return result;
 	}
+
+	/**
+	 * Find a file by looking in this processor's base directory and then
+	 * recursively in parent processors.
+	 *
+	 * @param key the relative file path to find
+	 * @return the file if found, or null
+	 */
+	public File findFile(String key) throws IOException {
+		@SuppressWarnings("resource")
+		Processor rover = this;
+		while (rover != null) {
+			File f = rover.getFile(key);
+			if (f.isFile())
+				return f;
+
+			rover = rover.getParent();
+		}
+		return null;
+	}
 }

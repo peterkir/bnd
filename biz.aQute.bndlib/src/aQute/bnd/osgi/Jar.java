@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -73,7 +74,9 @@ import aQute.lib.manifest.ManifestUtil;
 import aQute.lib.zip.ZipUtil;
 import aQute.libg.cryptography.Digester;
 import aQute.libg.cryptography.SHA256;
+import aQute.libg.glob.Glob;
 import aQute.libg.glob.PathSet;
+import aQute.service.reporter.Reporter;
 
 public class Jar implements Closeable {
 	private static final int	BUFFER_SIZE				= IOConstants.PAGE_SIZE * 16;
@@ -119,6 +122,7 @@ public class Jar implements Closeable {
 	private Compression											compression				= Compression.DEFLATE;
 	private boolean												closed;
 	private String[]											algorithms;
+	private Reporter											reporter;
 	private SHA256												sha256;
 	private boolean												calculateFileDigest;
 	private int													fileLength				= -1;
@@ -1363,5 +1367,83 @@ public class Jar implements Closeable {
 
 	public void setDerived() {
 		this.closeResources = false;
+	}
+
+	/**
+	 * Move (rename) resources within this Jar. The {@code from} parameter may
+	 * be a directory prefix (ending with {@code /}) or a path that may contain
+	 * a glob pattern in the last segment. Resources are moved to the {@code to}
+	 * location. If {@code to} ends with {@code /} it is treated as a directory
+	 * prefix; otherwise it is treated as the exact destination path.
+	 *
+	 * @param from source path or directory prefix (may contain {@code *}
+	 *            wildcard in last segment)
+	 * @param to destination path or directory prefix
+	 * @return number of resources moved
+	 */
+	public int move(String from, String to) {
+		int n = 0;
+		Glob match = Glob.ALL;
+		boolean isWildcard;
+
+		if (!from.endsWith("/") && !from.isEmpty()) {
+			int index = from.lastIndexOf('/');
+			String suffix = from.substring(index + 1);
+			isWildcard = suffix.contains("*");
+			if (isWildcard && !to.endsWith("/")) {
+				int index2 = to.lastIndexOf('/');
+				String toName = to.substring(index2 + 1);
+				if (toName.equals(suffix)) {
+					to = to.substring(0, index2);
+				} else {
+					if (reporter != null) {
+						reporter.error(
+							"If wildcards are used to copy resources then the to must be a directory, it is a file: %s->%s",
+							from, to);
+					}
+				}
+			}
+
+			match = new Glob(suffix);
+			from = index > 0 ? from.substring(0, index + 1) : "";
+		} else
+			isWildcard = false;
+
+		boolean ignored = false;
+		Map<String, Resource> temp = new LinkedHashMap<>();
+		for (Map.Entry<String, Resource> e : getResources().entrySet()) {
+			if (e.getKey().startsWith(from)) {
+				String rest = e.getKey().substring(from.length());
+				if (match.matcher(rest).matches())
+					temp.put(e.getKey(), e.getValue());
+				else
+					ignored = true;
+			}
+		}
+
+		if (ignored && reporter != null && isWildcard) {
+			reporter.warning("Wildcard expression in 'from' restricted copy: from='%s/%s' to='%s'", from, match, to);
+		}
+
+		for (Map.Entry<String, Resource> e : temp.entrySet()) {
+			remove(e.getKey());
+		}
+
+		for (Map.Entry<String, Resource> e : temp.entrySet()) {
+			String out = to.endsWith("/") ? to + e.getKey().substring(from.length()) : to;
+			putResource(out, e.getValue());
+			n++;
+		}
+		return n;
+	}
+
+	/**
+	 * Set a reporter for warning/error messages during operations such as
+	 * {@link #move}.
+	 *
+	 * @param reporter the reporter to use
+	 */
+	public void setReporter(Reporter reporter) {
+		this.reporter = reporter;
 	}
 }

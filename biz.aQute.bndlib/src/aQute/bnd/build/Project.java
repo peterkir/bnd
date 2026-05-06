@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.jar.Manifest;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -58,6 +59,7 @@ import org.slf4j.LoggerFactory;
 import aQute.bnd.build.Container.TYPE;
 import aQute.bnd.build.ProjectBuilder.ArtifactInfoImpl;
 import aQute.bnd.build.ProjectBuilder.BuildInfoImpl;
+import aQute.bnd.build.model.EE;
 import aQute.bnd.exceptions.ConsumerWithException;
 import aQute.bnd.exceptions.Exceptions;
 import aQute.bnd.exporter.executable.ExecutableJarExporter;
@@ -77,6 +79,7 @@ import aQute.bnd.osgi.About;
 import aQute.bnd.osgi.Analyzer;
 import aQute.bnd.osgi.Builder;
 import aQute.bnd.osgi.Constants;
+import aQute.bnd.osgi.Descriptors.PackageRef;
 import aQute.bnd.osgi.Instruction;
 import aQute.bnd.osgi.Instructions;
 import aQute.bnd.osgi.Jar;
@@ -110,6 +113,7 @@ import aQute.bnd.version.Version;
 import aQute.bnd.version.VersionRange;
 import aQute.lib.collections.Iterables;
 import aQute.lib.converter.Converter;
+import aQute.lib.fileset.FileSet;
 import aQute.lib.io.FileTree;
 import aQute.lib.io.IO;
 import aQute.lib.strings.Strings;
@@ -3792,4 +3796,211 @@ public class Project extends Processor {
 
 	}
 
+	/**
+	 * Pattern that matches a {@code @Version("x.y.z")} annotation in a Java
+	 * source file.
+	 */
+	public static final Pattern PACKAGE_INFO_VERSION_MATCH_P = Pattern
+		.compile("@[.\\p{javaJavaIdentifierPart}]*Version\\s*\\(\\s*\\\"(?<version>[^\"]+)\"\\s*\\)\\s*;");
+
+	/**
+	 * Parse the package version from a {@code package-info.java} file that
+	 * uses an {@code @Version} annotation.
+	 *
+	 * @param file the package-info.java file
+	 * @return the version string, or {@code null} if not found
+	 */
+	public static String parseVersionFromJavaPackageInfo(File file) throws IOException {
+		String content = IO.collect(file);
+		Matcher m = PACKAGE_INFO_VERSION_MATCH_P.matcher(content);
+		if (m.find()) {
+			return m.group("version");
+		}
+		return null;
+	}
+
+	/**
+	 * Parse the package version from a plain {@code packageinfo} file that
+	 * contains a {@code version} property.
+	 *
+	 * @param file the packageinfo file
+	 * @return the version string, or {@code null} if not found
+	 */
+	public static String parseVersionFromPackageInfo(File file) throws Exception {
+		UTF8Properties properties = new UTF8Properties();
+		properties.load(file, null);
+		return properties.getProperty("version");
+	}
+
+	/**
+	 * Search the project source path for the version of a given package, first
+	 * checking {@code package-info.java} then {@code packageinfo}.
+	 *
+	 * @param packageRef the package reference
+	 * @return the version string, or {@code null} if not found
+	 */
+	public String findVersionFromPackageInfo(PackageRef packageRef) throws Exception {
+		String pathSuffix = packageRef.getBinary();
+		for (File dir : getSourcePath()) {
+			File pi = IO.getFile(dir, pathSuffix + "/package-info.java");
+			if (pi.isFile()) {
+				String version = parseVersionFromJavaPackageInfo(pi);
+				if (version != null)
+					return version;
+			}
+			pi = IO.getFile(dir, pathSuffix + "/packageinfo");
+			if (pi.isFile()) {
+				UTF8Properties props = new UTF8Properties();
+				props.load(pi, this);
+				String version = props.getProperty("version");
+				if (version != null)
+					return version;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Return all Java source files found in the project source directories.
+	 *
+	 * @return collection of {@code .java} files
+	 */
+	public Collection<File> getAllJavaSourceFiles() {
+		return getAllSourceFiles(new String[] {
+			"java"
+		});
+	}
+
+	/**
+	 * Return all source files with the given extensions found in the project
+	 * source directories.
+	 *
+	 * @param extensions file extensions to include (without the leading dot)
+	 * @return collection of matching files
+	 */
+	public Collection<File> getAllSourceFiles(String[] extensions) {
+		String srcDirs = getProperty(Constants.DEFAULT_PROP_SRC_DIR);
+		List<String> list = Strings.split(srcDirs);
+
+		StringBuilder sb = new StringBuilder();
+		String del = "";
+		for (String srcDir : list) {
+			if (!srcDir.endsWith("/"))
+				srcDir = srcDir + "/";
+
+			for (String ext : extensions) {
+				sb.append(del)
+					.append(srcDir)
+					.append("**/*.")
+					.append(ext);
+				del = ",";
+			}
+		}
+
+		FileSet fs = new FileSet(getBase(), sb.toString());
+		return fs.getFiles();
+	}
+
+	/**
+	 * Return the Execution Environment for this project based on the
+	 * {@code javac.target} property.
+	 *
+	 * @return the EE, defaulting to JavaSE 1.8
+	 */
+	public EE getEE() {
+		String property = getProperty(Constants.JAVAC_TARGET, "1.8");
+		return EE.fromVersion(property);
+	}
+
+	/**
+	 * Return the set of all Java package names found under the project source
+	 * directories.
+	 *
+	 * @return set of package names
+	 */
+	public Set<String> getAllSourcePackages() {
+		String srcDirs = getProperty(Constants.DEFAULT_PROP_SRC_DIR);
+		List<String> list = Strings.split(srcDirs);
+		Set<String> packages = new HashSet<>();
+		for (String path : list) {
+			File d = getFile(path);
+			if (d.isDirectory())
+				traverseSourceDir(d, packages, "");
+		}
+		return packages;
+	}
+
+	private void traverseSourceDir(File d, Set<String> packages, String prefix) {
+		boolean hasJavaFile = false;
+
+		File[] children = d.listFiles();
+		if (children == null)
+			return;
+
+		for (File sub : children) {
+			if (sub.isFile() && sub.getName().endsWith(".java")) {
+				hasJavaFile = true;
+			} else if (sub.isDirectory()) {
+				String subPackage = prefix.isEmpty() ? sub.getName() : prefix + "." + sub.getName();
+				traverseSourceDir(sub, packages, subPackage);
+			}
+		}
+		if (hasJavaFile && !prefix.isEmpty())
+			packages.add(prefix);
+	}
+
+	/**
+	 * Return the resource path (relative to the project base) for the given
+	 * resource file name, searching the resource directories first and falling
+	 * back to the source directories.
+	 *
+	 * @param resource the resource file name
+	 * @return the relative path, or {@code null} if not found
+	 */
+	public String getResourcePath(String resource) {
+		String resourcePaths = getProperty(Constants.DEFAULT_PROP_RESOURCES_DIR);
+
+		if (resourcePaths == null) {
+			// Fall back to the old model
+			resourcePaths = getProperty(Constants.DEFAULT_PROP_SRC_DIR);
+		}
+
+		for (String dir : Strings.split(resourcePaths)) {
+			if (!dir.endsWith("/"))
+				dir = dir + "/";
+
+			String path = dir + resource;
+			File file = getFile(path);
+			if (file.isFile())
+				return path;
+		}
+
+		// last resort
+		String path = "src/main/resources/" + resource;
+		File file = getFile(path);
+		if (file.isFile())
+			return path;
+
+		return null;
+	}
+
+	/**
+	 * Return the source path (relative to the project base) for the given
+	 * source file name, searching the configured source directories.
+	 *
+	 * @param resource the source file name
+	 * @return the relative path, or {@code null} if not found
+	 */
+	public String getSourceFilePath(String resource) {
+		for (String dir : Strings.split(getProperty(Constants.DEFAULT_PROP_SRC_DIR))) {
+			if (!dir.endsWith("/"))
+				dir = dir + "/";
+
+			String path = dir + resource;
+			File file = getFile(path);
+			if (file.isFile())
+				return path;
+		}
+		return null;
+	}
 }

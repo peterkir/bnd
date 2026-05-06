@@ -240,6 +240,50 @@ public enum EE {
 	}
 
 	/**
+	 * Look up an EE by its capability version.
+	 *
+	 * @param version the capability version to match
+	 * @return the EE or null
+	 */
+	public static EE byVersion(Version version) {
+		for (EE ee : values) {
+			if (ee.capabilityVersion.equals(version))
+				return ee;
+		}
+		return null;
+	}
+
+	/**
+	 * Map a Java version string (e.g. "1.8", "9", "17") to the matching EE,
+	 * falling back to {@link #JavaSE_1_8} if not recognized.
+	 *
+	 * @param property the java version string
+	 * @return the matching EE, never null
+	 */
+	public static EE fromVersion(String property) {
+		if (property == null)
+			property = "1.8";
+
+		switch (property) {
+			case "1.4" :
+				return J2SE_1_4;
+			case "1.5" :
+				return J2SE_1_5;
+			case "1.6" :
+				return JavaSE_1_6;
+			case "1.7" :
+				return JavaSE_1_7;
+			case "1.8" :
+				return JavaSE_1_8;
+			default : {
+				// Handle numeric versions like "9", "11", "17" etc.
+				Optional<EE> found = highestFromTargetVersion(property);
+				return found.orElse(JavaSE_1_8);
+			}
+		}
+	}
+
+	/**
 	 * Return the list of packages
 	 *
 	 * @throws IOException (Unchecked via {@link Exceptions})
