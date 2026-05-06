@@ -242,14 +242,14 @@ public class EclipseCommand extends Processor {
 				if (matcher != null) {
 					logger.debug("matched PDE project {}", f);
 					Attrs attrs = selection.get(matcher);
-					System.out.println("Matched " + f.getName() + " " + attrs);
+					logger.info("Matched {} {}", f.getName(), attrs);
 					String workingset = attrs.get("-workingset", optWorkingset);
 
 					Project p = processFile(workingset, options.clean(), workspace, f);
 					if (p != null) {
 						for (Map.Entry<String, String> entry : attrs.entrySet()) {
 							p.setProperty(entry.getKey(), entry.getValue());
-							System.out.println("Set attr " + p + " " + entry);
+							logger.info("Set attr {} {}", p, entry);
 						}
 						projects.add(p);
 						had.add(matcher);
@@ -270,7 +270,7 @@ public class EclipseCommand extends Processor {
 
 	private Project processFile(String workingsets, boolean clean, Workspace workspace, File f)
 		throws IOException, Exception {
-		System.out.println("Process " + f);
+		logger.info("Process {}", f);
 		LibPde pde = new LibPde(workspace, f);
 
 		if (workingsets != null)

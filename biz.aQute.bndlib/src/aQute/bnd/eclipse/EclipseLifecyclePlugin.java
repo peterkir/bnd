@@ -300,9 +300,9 @@ public class EclipseLifecyclePlugin extends LifeCyclePlugin {
 		String manifestVersion, File packageInfo) throws IOException {
 		String content = IO.collect(packageInfo);
 		Matcher m = PACKAGE_INFO_VERSION_MATCH_P.matcher(content);
-		boolean hasVersionAnnotation = m.matches();
+		boolean hasVersionAnnotation = m.find();
 		if (hasVersionAnnotation) {
-			String fileVersion = m.group(1);
+			String fileVersion = m.group(2);
 			if (manifestVersion.equals(fileVersion)) {
 				exportedPackage.setVersionString(null);
 				changes = true;

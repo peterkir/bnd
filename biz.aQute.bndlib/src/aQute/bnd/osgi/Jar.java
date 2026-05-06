@@ -1398,7 +1398,7 @@ public class Jar implements Closeable {
 				} else {
 					if (reporter != null) {
 						reporter.error(
-							"If wildcards are used to copy resources then the to must be a directory, it is a file: %s->%s",
+							"If wildcards are used to move resources then the to must be a directory, it is a file: %s->%s",
 							from, to);
 					}
 				}

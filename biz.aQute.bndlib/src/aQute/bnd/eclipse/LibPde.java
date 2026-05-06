@@ -154,7 +154,7 @@ public class LibPde extends Processor {
 
 			bnd = "# Remove next line and META-INF directory when you are going to modify this bundle\n"
 				+ "# and fix any issues. This line mimics the PDE manifest first behavior\n"
-				+ "# and voids many functions of bndtools\n" //
+				+ "# and avoids many functions of bndtools\n" //
 				+ "-manifest: " + META_INF_MANIFEST_MF + "\n\n" + bnd;
 		}
 
