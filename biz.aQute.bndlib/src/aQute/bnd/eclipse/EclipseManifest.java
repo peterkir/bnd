@@ -167,7 +167,7 @@ public class EclipseManifest {
 				sb.append("; \\\n        ");
 				sb.append(a.getKey()
 					.trim());
-				Type type = value.getType(e.getKey());
+				Type type = value.getType(a.getKey());
 				if (type != null && !type.equals(Type.STRING)) {
 					sb.append(":")
 						.append(type);
