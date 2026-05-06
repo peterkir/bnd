@@ -44,6 +44,9 @@ import aQute.libg.glob.Glob;
 public class EclipseLifecyclePlugin extends LifeCyclePlugin {
 	static XPathFactory	xpf								= XPathFactory.newInstance();
 
+	/** Default Java version used when {@code javac.target} is not configured. */
+	static final String	DEFAULT_JAVA_VERSION			= "1.8";
+
 	static Pattern		PACKAGE_INFO_VERSION_MATCH_P	= Pattern
 		.compile("@.*\\.Version\\s*(\\s*\\\"([^\"]+)\"\\s*)\\s*(;|\r?\n)");
 
@@ -178,12 +181,12 @@ public class EclipseLifecyclePlugin extends LifeCyclePlugin {
 		Tag top = new Tag("classpath");
 
 		Tag jre = new Tag(top, "classpathentry");
-		String javaTarget = project.getProperty("javac.target", "1.8");
+		String javaTarget = project.getProperty("javac.target", DEFAULT_JAVA_VERSION);
 
 		if (!javaTarget.matches("\\d+(\\.\\d+)?")) {
-			project.error("Invalid javac.target property. Is '%s' but must be like 1.8 or 11. Assuming 1.8",
-				javaTarget);
-			javaTarget = "1.8";
+			project.error("Invalid javac.target property. Is '%s' but must be like 1.8 or 11. Assuming %s",
+				javaTarget, DEFAULT_JAVA_VERSION);
+			javaTarget = DEFAULT_JAVA_VERSION;
 		}
 
 		jre.addAttribute("kind", "con");
@@ -345,8 +348,8 @@ public class EclipseLifecyclePlugin extends LifeCyclePlugin {
 				.mkdirs();
 		}
 
-		String javacTarget = p.getProperty(Constants.JAVAC_TARGET, "1.8");
-		String javacSource = p.getProperty(Constants.JAVAC_SOURCE, "1.8");
+		String javacTarget = p.getProperty(Constants.JAVAC_TARGET, DEFAULT_JAVA_VERSION);
+		String javacSource = p.getProperty(Constants.JAVAC_SOURCE, DEFAULT_JAVA_VERSION);
 
 		props.setProperty("org.eclipse.jdt.core.compiler.codegen.targetPlatform", javacTarget);
 		props.setProperty("org.eclipse.jdt.core.compiler.codegen.source", javacSource);

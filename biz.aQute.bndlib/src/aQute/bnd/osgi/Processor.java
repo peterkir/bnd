@@ -2996,7 +2996,7 @@ public class Processor extends Domain implements Reporter, Registry, Constants, 
 	 * @param key the relative file path to find
 	 * @return the file if found as a regular file, or null
 	 */
-	public File findFile(String key) throws IOException {
+	public File findFile(String key) {
 		@SuppressWarnings("resource")
 		Processor rover = this;
 		while (rover != null) {

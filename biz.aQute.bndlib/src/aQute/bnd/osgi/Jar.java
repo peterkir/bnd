@@ -1392,9 +1392,9 @@ public class Jar implements Closeable {
 			isWildcard = suffix.contains("*");
 			if (isWildcard && !to.endsWith("/")) {
 				int index2 = to.lastIndexOf('/');
-				String toName = to.substring(index2 + 1);
+				String toName = index2 >= 0 ? to.substring(index2 + 1) : to;
 				if (toName.equals(suffix)) {
-					to = to.substring(0, index2);
+					to = index2 >= 0 ? to.substring(0, index2) : "";
 				} else {
 					if (reporter != null) {
 						reporter.error(

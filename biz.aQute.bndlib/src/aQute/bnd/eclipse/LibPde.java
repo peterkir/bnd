@@ -131,7 +131,7 @@ public class LibPde extends Processor {
 		Set<String> remove = content.getResources()
 			.keySet()
 			.stream()
-			.filter(s -> s.endsWith(".DS_store"))
+			.filter(s -> s.endsWith(".DS_Store"))
 			.collect(Collectors.toSet());
 		remove.add("pom.xml");
 
