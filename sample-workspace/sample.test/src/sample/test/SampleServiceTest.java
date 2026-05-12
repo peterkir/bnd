@@ -3,6 +3,8 @@ package sample.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
@@ -22,6 +24,8 @@ import sample.api.SampleService;
 public class SampleServiceTest {
 
     private volatile BundleContext context;
+    private ServiceReference<SampleService> serviceRef;
+    private SampleService service;
 
     /**
      * Injection point for the BundleContext.
@@ -31,31 +35,36 @@ public class SampleServiceTest {
         this.context = context;
     }
 
+    @Before
+    public void setUp() {
+        assertNotNull("BundleContext should be injected", context);
+        serviceRef = context.getServiceReference(SampleService.class);
+        assertNotNull("SampleService should be registered", serviceRef);
+        service = context.getService(serviceRef);
+        assertNotNull("SampleService should be available", service);
+    }
+
+    @After
+    public void tearDown() {
+        if (serviceRef != null && context != null) {
+            context.ungetService(serviceRef);
+        }
+    }
+
     @Test
     public void testServiceAvailable() {
-        assertNotNull("BundleContext should be injected", context);
-        
-        ServiceReference<SampleService> ref = context.getServiceReference(SampleService.class);
-        assertNotNull("SampleService should be registered", ref);
-        
-        SampleService service = context.getService(ref);
+        // Service availability is verified in setUp()
         assertNotNull("SampleService should be available", service);
     }
 
     @Test
     public void testGreet() {
-        ServiceReference<SampleService> ref = context.getServiceReference(SampleService.class);
-        SampleService service = context.getService(ref);
-        
         String greeting = service.greet("World");
         assertEquals("Hello, World!", greeting);
     }
 
     @Test
     public void testGetName() {
-        ServiceReference<SampleService> ref = context.getServiceReference(SampleService.class);
-        SampleService service = context.getService(ref);
-        
         String name = service.getName();
         assertNotNull("Name should not be null", name);
         assertEquals("DefaultSampleService", name);
@@ -63,9 +72,6 @@ public class SampleServiceTest {
 
     @Test
     public void testCalculate() {
-        ServiceReference<SampleService> ref = context.getServiceReference(SampleService.class);
-        SampleService service = context.getService(ref);
-        
         int result = service.calculate(2, 3);
         assertEquals(5, result);
     }
