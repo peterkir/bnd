@@ -1,0 +1,41 @@
+# Framework Restart Configuration
+#
+# This bndrun file demonstrates framework restart and persistence options.
+#
+# Usage:
+#   bnd run framework-restart.bndrun
+
+Bundle-Version: 1.0.0
+Bundle-Name: Framework Restart Example
+
+# Framework configuration
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# System capabilities for resolution
+-runsystemcapabilities: ${native_capability}
+-resolve.effective: active
+
+# Requirements
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.impl)'
+
+# Run bundles
+-runbundles: \
+    sample.api;version=snapshot,\
+    sample.impl;version=snapshot,\
+    org.apache.felix.scr;version='[2.2.10,3)'
+
+# Keep framework storage between runs
+# This preserves bundle installations and configurations
+-runkeep: true
+
+# Specify storage location
+-runstorage: ${.}/generated/fw-storage
+
+# Enable framework restart functionality
+# When true, the framework will restart instead of exit on framework stop
+-runframeworkrestart: true
+
+# Enable tracing
+-runtrace: true

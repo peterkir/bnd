@@ -1,0 +1,29 @@
+# Sample Implementation Project
+#
+# This project demonstrates an OSGi implementation bundle containing
+# Declarative Services components.
+
+-include: ${workspace}/cnf/includes/jdt.bnd
+
+Bundle-SymbolicName: sample.impl
+Bundle-Version: 1.0.0.${tstamp}
+Bundle-Description: Sample implementation bundle with DS components
+Bundle-Activator: sample.impl.Activator
+
+# Private packages (not exported)
+-privatepackage: \
+    sample.impl
+
+# Service Component annotations processing
+-dsannotations: *
+
+# Build dependencies
+-buildpath: \
+    osgi.annotation;version=latest,\
+    osgi.core;version=latest,\
+    org.osgi.service.component.annotations;version=latest,\
+    sample.api;version=latest
+
+# Don't release this sample
+-buildrepo:
+-releaserepo:

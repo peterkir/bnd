@@ -1,0 +1,51 @@
+########################
+## BND WORKSPACE BUILD SETTINGS
+########################
+## This is a sample workspace demonstrating bnd CLI features.
+## It is designed to be used as test data for resolving, executing bnd and bndruns,
+## executing test cases, and debugging launches.
+
+# Java Compiler Options
+javac.debug: on
+javac.source: 17
+javac.target: 17
+-noimportjava: true
+
+# Versioning
+base.version: 1.0.0
+Bundle-Version: ${base.version}.${tstamp}-SNAPSHOT
+
+# Include additional settings
+-include: \
+    ${workspace}/cnf/ext/repositories.bnd,\
+    ${workspace}/cnf/ext/junit.bnd
+
+# OSGi settings
+-reproducible: true
+-noextraheaders: true
+
+# Repositories - defined inline for standalone usage
+-plugin.1.Local: \
+    aQute.lib.deployer.FileRepo; \
+        location="${workspace}/cnf/repo"; \
+        readonly=false; \
+        name="Local"
+
+# Maven Central for dependency resolution
+-plugin.2.MavenCentral: \
+    aQute.bnd.repository.maven.provider.MavenBndRepository; \
+        releaseUrl="https://repo.maven.apache.org/maven2/"; \
+        index="${workspace}/cnf/ext/central.mvn"; \
+        name="Maven Central"
+
+# Build and release repository settings
+-buildrepo: Local
+-releaserepo: Local
+
+# Enable remote workspace for testing
+-remoteworkspace: true
+
+# Runtime properties for test launcher
+-runproperties.testlauncher: \
+    in.workspace=workspace,\
+    in.project=workspace

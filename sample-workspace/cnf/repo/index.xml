@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="http://www.osgi.org/www/obr2html.xsl"?>
+<repository name="Local" increment="0" xmlns="http://www.osgi.org/xmlns/repository/v1.0.0">
+    <!-- 
+        Local Repository Index
+        
+        This is a placeholder repository index. Add bundles to the repo directory
+        and regenerate the index using:
+        
+            bnd repo index
+        
+        Or manually add resource entries below.
+    -->
+</repository>

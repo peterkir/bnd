@@ -1,0 +1,46 @@
+# Test Run Configuration
+#
+# This bndrun file demonstrates OSGi testing.
+#
+# Usage:
+#   bnd test testrun.bndrun           # Run OSGi tests
+#   bnd runtests testrun.bndrun       # Run tests with HTML report
+#
+# From Eclipse/Bndtools:
+#   Right-click > Run As > Bnd OSGi Test Launcher
+
+Bundle-Version: 1.0.0
+Bundle-Name: Test Run
+
+# Framework configuration
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# System capabilities for resolution
+-runsystemcapabilities: ${native_capability}
+-resolve.effective: active
+
+# Requirements - the test bundle and its dependencies
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.test)',\
+    osgi.identity;filter:='(osgi.identity=sample.impl)'
+
+# Run bundles
+-runbundles: \
+    sample.api;version=snapshot,\
+    sample.impl;version=snapshot,\
+    sample.test;version=snapshot,\
+    org.apache.felix.scr;version='[2.2.10,3)',\
+    org.apache.servicemix.bundles.junit;version='[4.13,5)'
+
+# Enable tracing for test debugging
+-runtrace: true
+
+# Test configuration
+Test-Cases: sample.test.SampleServiceTest
+
+# Tester bundle
+-tester: biz.aQute.tester;version=snapshot
+
+# Test reports directory
+test-reports: ${.}/test-reports

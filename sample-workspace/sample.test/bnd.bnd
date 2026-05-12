@@ -1,0 +1,71 @@
+# Sample Test Project
+#
+# This project demonstrates OSGi testing with bnd.
+# It contains test cases that can be executed via:
+#   - bnd test          : Run OSGi tests
+#   - bnd junit         : Run JUnit tests (non-OSGi)
+#   - bnd runtests      : Run OSGi tests with report generation
+#
+# The project also contains various bndrun files for different scenarios.
+
+-include: ${workspace}/cnf/includes/jdt.bnd
+
+Bundle-SymbolicName: sample.test
+Bundle-Version: 1.0.0.${tstamp}
+Bundle-Description: Sample test bundle demonstrating OSGi testing
+
+# Test-Cases header for OSGi test discovery
+Test-Cases: ${test-cases}
+
+# Private packages - include test code
+-privatepackage: \
+    sample.test
+
+# Build dependencies
+-buildpath: \
+    osgi.annotation;version=latest,\
+    osgi.core;version=latest,\
+    sample.api;version=latest,\
+    sample.impl;version=latest,\
+    junit:junit;version=latest
+
+# Test dependencies
+-testpath: \
+    junit:junit;version=latest
+
+# Tester configuration
+-tester: biz.aQute.tester;version=snapshot
+
+# Run path - includes launcher and framework
+-runpath: \
+    org.apache.felix.framework;version='[7.0.5,8)',\
+    biz.aQute.launcher;version=snapshot
+
+# Run requirements
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.test)',\
+    osgi.identity;filter:='(osgi.identity=sample.impl)'
+
+# Run bundles (manually listed - use resolve to auto-generate)
+-runbundles: \
+    sample.api;version=snapshot,\
+    sample.impl;version=snapshot,\
+    sample.test;version=snapshot,\
+    org.apache.felix.scr;version='[2.2.10,3)',\
+    org.apache.servicemix.bundles.junit;version='[4.13,5)'
+
+# Framework
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# Enable trace for debugging
+-runtrace: true
+
+# Test reports directory
+test-reports: test-reports
+
+# Don't release test bundle
+-buildrepo:
+-releaserepo:
+-nojunit: false
+-nojunitosgi: false

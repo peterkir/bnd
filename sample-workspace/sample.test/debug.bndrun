@@ -1,0 +1,65 @@
+# Debug Run Configuration
+#
+# This bndrun file demonstrates debugging an OSGi application.
+# It includes JVM debug options for remote debugging.
+#
+# Usage:
+#   bnd run debug.bndrun            # Run with debug enabled
+#
+# From Eclipse/Bndtools:
+#   Right-click > Debug As > Bnd OSGi Run Launcher
+#   
+# Remote Debug Connection:
+#   Host: localhost
+#   Port: 5005
+#   (The application will wait for debugger to attach)
+#
+# Alternative: Connect without suspend (application starts immediately):
+#   Modify -runvm to use: suspend=n
+
+Bundle-Version: 1.0.0
+Bundle-Name: Debug Run
+
+# Framework configuration
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# System capabilities for resolution
+-runsystemcapabilities: ${native_capability}
+-resolve.effective: active
+
+# Requirements
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.impl)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.shell)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.command)'
+
+# Run bundles
+-runbundles: \
+    sample.api;version=snapshot,\
+    sample.impl;version=snapshot,\
+    org.apache.felix.scr;version='[2.2.10,3)',\
+    org.apache.felix.gogo.runtime;version='[1.1.6,2)',\
+    org.apache.felix.gogo.shell;version='[1.1.4,2)',\
+    org.apache.felix.gogo.command;version='[1.1.2,2)'
+
+# JVM Debug Options
+# -agentlib:jdwp - Java Debug Wire Protocol agent
+# transport=dt_socket - Use socket transport
+# server=y - Listen for debugger connections
+# suspend=y - Wait for debugger before starting (change to 'n' to start immediately)
+# address=5005 - Port to listen on
+-runvm: \
+    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"
+
+# Runtime properties
+-runproperties: \
+    osgi.console=,\
+    osgi.console.enable.builtin=false
+
+# Enable tracing for debugging
+-runtrace: true
+
+# Keep framework storage between runs (useful for debugging)
+-runkeep: true
+-runstorage: ${.}/generated/debug-storage

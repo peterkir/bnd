@@ -1,0 +1,36 @@
+# Resolve Example Configuration
+#
+# This bndrun file demonstrates the resolve command.
+# The -runbundles are intentionally minimal - use resolve to auto-generate.
+#
+# Usage:
+#   bnd resolve resolve-example.bndrun                 # Show resolved bundles
+#   bnd resolve -b resolve-example.bndrun              # Print bundles in Require format
+#   bnd resolve -f resolve-example.bndrun              # Print file paths
+#   bnd resolve -W resolve-example.bndrun              # Write -runbundles back to file
+#   bnd resolve -d resolve-example.bndrun              # Create dependency dot file
+#   bnd resolve dot -o deps.dot resolve-example.bndrun # Create named dot file
+
+Bundle-Version: 1.0.0
+Bundle-Name: Resolve Example
+
+# Framework configuration
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# System capabilities for resolution
+-runsystemcapabilities: ${native_capability}
+-resolve.effective: active
+
+# Requirements - only declare what you need, let resolver find dependencies
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.impl)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.shell)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.scr)'
+
+# Run bundles - to be filled in by resolver
+# Run: bnd resolve -W resolve-example.bndrun
+-runbundles: 
+
+# Enable tracing
+-runtrace: true

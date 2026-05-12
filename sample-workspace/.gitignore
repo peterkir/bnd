@@ -1,0 +1,20 @@
+# Sample Workspace .gitignore
+
+# Build output
+/*/bin/
+/*/bin_test/
+/*/generated/
+/*.jar
+
+# Test reports
+/*/test-reports/
+
+# Framework storage
+/*/generated/
+
+# Eclipse metadata
+.metadata/
+
+# OS files
+.DS_Store
+Thumbs.db

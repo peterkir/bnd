@@ -1,0 +1,7 @@
+# Repository Configuration
+# 
+# This file defines the repositories used by this workspace.
+# The repositories are used for dependency resolution, building, and releasing.
+
+# Maven Central coordinates for common OSGi bundles
+mavencentral: https://repo.maven.apache.org/maven2/

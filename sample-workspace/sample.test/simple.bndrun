@@ -1,0 +1,45 @@
+# Simple Run Configuration
+#
+# This bndrun file demonstrates a simple OSGi runtime configuration.
+#
+# Usage:
+#   bnd run simple.bndrun           # Run the OSGi framework
+#   bnd resolve simple.bndrun       # Resolve dependencies
+#   bnd resolve -W simple.bndrun    # Resolve and write back to file
+#
+# From Eclipse/Bndtools:
+#   Right-click > Run As > Bnd OSGi Run Launcher
+
+Bundle-Version: 1.0.0
+Bundle-Name: Simple Run
+
+# Framework configuration
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-17
+
+# System capabilities for resolution
+-runsystemcapabilities: ${native_capability}
+-resolve.effective: active
+
+# Requirements - what we want to run
+-runrequires: \
+    osgi.identity;filter:='(osgi.identity=sample.impl)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.shell)',\
+    osgi.identity;filter:='(osgi.identity=org.apache.felix.gogo.command)'
+
+# Run bundles - resolved list (can be auto-generated)
+-runbundles: \
+    sample.api;version=snapshot,\
+    sample.impl;version=snapshot,\
+    org.apache.felix.scr;version='[2.2.10,3)',\
+    org.apache.felix.gogo.runtime;version='[1.1.6,2)',\
+    org.apache.felix.gogo.shell;version='[1.1.4,2)',\
+    org.apache.felix.gogo.command;version='[1.1.2,2)'
+
+# Runtime properties
+-runproperties: \
+    osgi.console=,\
+    osgi.console.enable.builtin=false
+
+# Enable tracing for debugging
+-runtrace: true

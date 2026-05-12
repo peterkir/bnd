@@ -1,0 +1,30 @@
+# Maven Central index
+# This file lists Maven Central artifacts for resolution.
+# Format: groupId:artifactId[:packaging[:classifier]]:version
+
+# OSGi Core and Compendium
+org.osgi:osgi.core:8.0.0
+org.osgi:osgi.annotation:8.1.0
+org.osgi:org.osgi.service.component.annotations:1.5.1
+org.osgi:org.osgi.service.component:1.5.1
+
+# Apache Felix Framework
+org.apache.felix:org.apache.felix.framework:7.0.5
+
+# Apache Felix Shell (Gogo)
+org.apache.felix:org.apache.felix.gogo.runtime:1.1.6
+org.apache.felix:org.apache.felix.gogo.shell:1.1.4
+org.apache.felix:org.apache.felix.gogo.command:1.1.2
+
+# Apache Felix SCR (Declarative Services)
+org.apache.felix:org.apache.felix.scr:2.2.10
+
+# Apache Felix Config Admin
+org.apache.felix:org.apache.felix.configadmin:1.9.26
+
+# Apache Felix Log
+org.apache.felix:org.apache.felix.log:1.2.6
+
+# JUnit
+org.apache.servicemix.bundles:org.apache.servicemix.bundles.junit:4.13.2_1
+junit:junit:4.13.2

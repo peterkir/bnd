@@ -1,0 +1,23 @@
+# Sample API Project
+#
+# This project demonstrates an OSGi API bundle containing service interfaces.
+# It exports the sample.api package for use by other bundles.
+
+-include: ${workspace}/cnf/includes/jdt.bnd
+
+Bundle-SymbolicName: sample.api
+Bundle-Version: 1.0.0.${tstamp}
+Bundle-Description: Sample API bundle with service interfaces
+
+# Export the API package with versioning
+Export-Package: \
+    sample.api;version="1.0.0"
+
+# Build path - only OSGi annotations needed for API
+-buildpath: \
+    osgi.annotation;version=latest,\
+    osgi.core;version=latest
+
+# Don't release this sample
+-buildrepo:
+-releaserepo:
