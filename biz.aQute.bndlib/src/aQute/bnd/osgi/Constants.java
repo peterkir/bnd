@@ -559,8 +559,10 @@ public interface Constants {
 	 */
 
 	String		DEFAULT_PROP_SRC_DIR						= "src";
+	String		DEFAULT_PROP_RESOURCES_DIR					= "src.resources";
 	String		DEFAULT_PROP_BIN_DIR						= "bin";
 	String		DEFAULT_PROP_TESTSRC_DIR					= "testsrc";
+	String		DEFAULT_PROP_TESTRESOURCES_DIR				= "testsrc.resources";
 	String		DEFAULT_PROP_TESTBIN_DIR					= "testbin";
 	String		DEFAULT_PROP_TARGET_DIR						= "target-dir";
 

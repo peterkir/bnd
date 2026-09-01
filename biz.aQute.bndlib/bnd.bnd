@@ -17,6 +17,7 @@ Export-Package: \
     aQute.bnd.buildtool;-noimport:=true,\
     aQute.bnd.component.error;-noimport:=true,\
     aQute.bnd.differ;-noimport:=true,\
+    aQute.bnd.eclipse;-noimport:=true,\
     aQute.bnd.filerepo;-noimport:=true,\
     aQute.bnd.header;-noimport:=true,\
     aQute.bnd.help.*;-noimport:=true,\
