@@ -695,6 +695,10 @@ public class BndSourceEffectivePage extends FormPage {
 
 			boolean showMerged = showMergedPropertiesButton.getSelection();
 
+			java.io.File currentFile = editModel.getOwner()
+				.getPropertiesFile();
+			String currentFilePath = currentFile != null ? currentFile.getAbsolutePath() : null;
+
 			if (showMerged) {
 
 				Collection<String> stems = visible.stream()
@@ -736,9 +740,13 @@ public class BndSourceEffectivePage extends FormPage {
 
 						List<String> provList = stemProvenances.get(stem);
 
+						boolean isLocal = currentFilePath != null
+							&& provList != null
+							&& provList.contains(currentFilePath);
+
 						String tooltip = BndEditModel.format(stem, value);
 						return new PropertyRow(stem, value, provList, tooltip,
-							p.getErrors());
+							p.getErrors(), isLocal);
 					})
 					.toArray();
 
@@ -748,10 +756,11 @@ public class BndSourceEffectivePage extends FormPage {
 					.map(k -> {
 						String provenance = k.getProvenance()
 							.orElse(null);
+						boolean isLocal = currentFilePath != null && currentFilePath.equals(provenance);
 						Processor p = getProperties();
 						String tooltip = BndEditModel.format(k.key(), expandedOrRawValue(k, p));
 						return new PropertyRow(k.key(), expandedOrRawValue(k, p), List.of(provenance), tooltip,
-							p.getErrors());
+							p.getErrors(), isLocal);
 					})
 					.toArray();
 			}
@@ -791,6 +800,12 @@ public class BndSourceEffectivePage extends FormPage {
 			if (element instanceof PropertyRow pkey) {
 				String text = spec.label != null ? spec.label.apply(pkey) : null;
 				cell.setText(text);
+				if (!pkey.isLocal()) {
+					cell.setForeground(Display.getCurrent()
+						.getSystemColor(SWT.COLOR_DARK_GRAY));
+				} else {
+					cell.setForeground(null);
+				}
 			}
 		}
 
@@ -830,5 +845,5 @@ public class BndSourceEffectivePage extends FormPage {
 	 * represents a row in the Effective view table.
 	 */
 	record PropertyRow(String title, String value, List<String> provenances, String tooltip,
-		List<String> errors) {}
+		List<String> errors, boolean isLocal) {}
 }
