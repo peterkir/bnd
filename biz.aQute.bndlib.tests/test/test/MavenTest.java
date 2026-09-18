@@ -610,6 +610,135 @@ public class MavenTest {
 		b.close();
 	}
 
+	/**
+	 * Tests the build.bnd scenario with no -snapshot property (commented out: #-snapshot:).
+	 * <p>
+	 * When {@code Bundle-Version: 1.0.0.${tstamp}-SNAPSHOT} and the -snapshot instruction is not
+	 * set, the Bundle-Version remains unchanged (SNAPSHOT qualifier preserved). The Maven POM
+	 * version, computed using
+	 * {@code -pom: version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}},
+	 * evaluates to {@code 1.0.0-SNAPSHOT} because the {@code ===s} mask detects the
+	 * {@code -SNAPSHOT} suffix in the qualifier.
+	 */
+	@Test
+	public void testBuildBndPomVersionFormula_NoSnapshot() throws Exception {
+		Builder b = new Builder();
+		b.setBundleSymbolicName("com.example.test");
+		b.setBundleVersion("1.0.0.20260309-2036-SNAPSHOT");
+		b.setProperty("-pom",
+			"true,version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}");
+		// No -snapshot property set (simulates #-snapshot: in build.bnd)
+		b.setProperty("-resourceonly", "true");
+
+		Jar jar = b.build();
+		assertTrue(b.check());
+
+		// Bundle-Version stays unchanged (no -snapshot transformation)
+		assertEquals("1.0.0.20260309-2036-SNAPSHOT",
+			jar.getManifest()
+				.getMainAttributes()
+				.getValue(Constants.BUNDLE_VERSION));
+
+		// Maven POM version: ===s mask detects -SNAPSHOT suffix in qualifier → 1.0.0-SNAPSHOT
+		Resource pomResource = jar.getResource("pom.xml");
+		assertNotNull(pomResource);
+		Document d = XML.newDocumentBuilderFactory()
+			.newDocumentBuilder()
+			.parse(pomResource.openInputStream());
+		XPath xpath = XPathFactory.newInstance()
+			.newXPath();
+		assertEquals("1.0.0-SNAPSHOT", xpath.evaluate("/project/version", d));
+
+		jar.close();
+		b.close();
+	}
+
+	/**
+	 * Tests the build.bnd scenario with empty -snapshot: (release build).
+	 * <p>
+	 * When {@code Bundle-Version: 1.0.0.${tstamp}-SNAPSHOT} and {@code -snapshot:} is set to
+	 * empty, the {@code -SNAPSHOT} suffix is stripped from the qualifier, leaving the timestamp.
+	 * The Maven POM version, computed using
+	 * {@code -pom: version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}},
+	 * evaluates to {@code 1.0.0} because the {@code ===s} mask strips the non-SNAPSHOT timestamp
+	 * qualifier.
+	 */
+	@Test
+	public void testBuildBndPomVersionFormula_EmptySnapshot() throws Exception {
+		Builder b = new Builder();
+		b.setBundleSymbolicName("com.example.test");
+		b.setBundleVersion("1.0.0.20260309-2036-SNAPSHOT");
+		b.setProperty("-pom",
+			"true,version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}");
+		b.setProperty("-snapshot", ""); // Empty value: release build
+		b.setProperty("-resourceonly", "true");
+
+		Jar jar = b.build();
+		assertTrue(b.check());
+
+		// Bundle-Version: -SNAPSHOT suffix is removed from qualifier, timestamp remains
+		assertEquals("1.0.0.20260309-2036",
+			jar.getManifest()
+				.getMainAttributes()
+				.getValue(Constants.BUNDLE_VERSION));
+
+		// Maven POM version: ===s mask strips non-SNAPSHOT qualifier → 1.0.0
+		Resource pomResource = jar.getResource("pom.xml");
+		assertNotNull(pomResource);
+		Document d = XML.newDocumentBuilderFactory()
+			.newDocumentBuilder()
+			.parse(pomResource.openInputStream());
+		XPath xpath = XPathFactory.newInstance()
+			.newXPath();
+		assertEquals("1.0.0", xpath.evaluate("/project/version", d));
+
+		jar.close();
+		b.close();
+	}
+
+	/**
+	 * Tests the build.bnd scenario with -snapshot: RC1 (RC release build).
+	 * <p>
+	 * When {@code Bundle-Version: 1.0.0.${tstamp}-SNAPSHOT} and {@code -snapshot: RC1},
+	 * the {@code -SNAPSHOT} suffix in the qualifier is replaced with {@code -RC1}.
+	 * The Maven POM version, computed using
+	 * {@code -pom: version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}},
+	 * evaluates to {@code 1.0.0-RC1} because the {@code ===} mask strips the qualifier and
+	 * {@code -RC1} is appended.
+	 */
+	@Test
+	public void testBuildBndPomVersionFormula_RC1Snapshot() throws Exception {
+		Builder b = new Builder();
+		b.setBundleSymbolicName("com.example.test");
+		b.setBundleVersion("1.0.0.20260309-2036-SNAPSHOT");
+		b.setProperty("-pom",
+			"true,version=${if;${def;-snapshot};${versionmask;===;${@version}}-${def;-snapshot};${versionmask;===s;${@version}}}");
+		b.setProperty("-snapshot", "RC1"); // RC1 build
+		b.setProperty("-resourceonly", "true");
+
+		Jar jar = b.build();
+		assertTrue(b.check());
+
+		// Bundle-Version: -SNAPSHOT suffix replaced with -RC1
+		assertEquals("1.0.0.20260309-2036-RC1",
+			jar.getManifest()
+				.getMainAttributes()
+				.getValue(Constants.BUNDLE_VERSION));
+
+		// Maven POM version: === mask strips qualifier → 1.0.0, then -RC1 appended → 1.0.0-RC1
+		Resource pomResource = jar.getResource("pom.xml");
+		assertNotNull(pomResource);
+		Document d = XML.newDocumentBuilderFactory()
+			.newDocumentBuilder()
+			.parse(pomResource.openInputStream());
+		XPath xpath = XPathFactory.newInstance()
+			.newXPath();
+		assertEquals("1.0.0-RC1", xpath.evaluate("/project/version", d));
+
+		jar.close();
+		b.close();
+	}
+
 	@Test
 	public void testExportWithQualifierSnapshotToMavenRepo(@InjectTemporaryDirectory File tmp) throws Exception {
 		// Test with a qualifier that ends in -SNAPSHOT (like BUILD-SNAPSHOT)
