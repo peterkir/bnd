@@ -15,7 +15,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
 
 import aQute.libg.glob.Glob;
@@ -24,6 +26,7 @@ import org.bndtools.api.ILogger;
 import org.bndtools.api.Logger;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.viewers.ITreeContentProvider;
@@ -66,14 +69,29 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 	 * if you search with lots of different filter strings.
 	 */
 	private static final int									MAX_CACHED_FILTER_RESULTS	= 10;
+	private static final int									MAX_CACHED_REPOSITORIES		= 16;
 	private boolean												showRepos					= true;
 	private volatile boolean showFeatures = true;
-	private volatile int featureVisibilityGeneration;
 
 	private Requirement											requirementFilter			= null;
 
-	private final Map<RepositoryPlugin, Map<String, Object[]>>	repoPluginListResults		= new HashMap<>();
+	private static final Map<RepositoryPlugin, Map<String, Object[]>>	repoPluginListResults	= new LinkedHashMap<>(16,
+		0.75f, true) {
+		private static final long serialVersionUID = 1L;
+
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<RepositoryPlugin, Map<String, Object[]>> eldest) {
+			return size() > MAX_CACHED_REPOSITORIES;
+		}
+	};
 	private StructuredViewer									structuredViewer;
+	private boolean									waitForFastResult		= true;
+	private static final String LOCAL_CONTENT_CACHE_KEY = "\u0000local-content";
+	private boolean									localFiltering;
+	private final Map<RepositoryPlugin, Map<String, Object[]>> pendingResults = new HashMap<>();
+	private final Map<RepositoryPlugin, Map<String, Object[]>> failedResults = new HashMap<>();
+	private volatile long inputGeneration;
+	private volatile boolean disposed;
 
 	public RepositoryTreeContentProvider() {
 		this.phases = EnumSet.allOf(ResolutionPhase.class);
@@ -92,14 +110,21 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 	}
 
 	public void setFilter(String filter) {
-		this.rawFilter = filter;
-		if (filter == null || filter.length() == 0 || filter.trim()
-			.equals("*")) {
+		String normalized = filter == null ? null : filter.trim();
+		if (normalized == null || normalized.isEmpty() || normalized.equals("*")) {
+			rawFilter = filter;
 			wildcardFilter = null;
 			wildcardGlob = null;
-		} else {
-			wildcardFilter = "*" + filter.trim() + "*";
-			wildcardGlob = new Glob(wildcardFilter, Pattern.CASE_INSENSITIVE);
+			return;
+		}
+		String candidate = "*" + normalized + "*";
+		try {
+			Glob candidateGlob = new Glob(candidate, Pattern.CASE_INSENSITIVE);
+			rawFilter = filter;
+			wildcardFilter = candidate;
+			wildcardGlob = candidateGlob;
+		} catch (PatternSyntaxException e) {
+			// Keep the last valid pattern while the user is still typing.
 		}
 	}
 
@@ -121,8 +146,25 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 
 	public void setShowFeatures(boolean showFeatures) {
 		this.showFeatures = showFeatures;
-		featureVisibilityGeneration++;
-		repoPluginListResults.clear();
+		invalidateRepositoryCache(null);
+	}
+
+	public void setWaitForFastResult(boolean waitForFastResult) {
+		this.waitForFastResult = waitForFastResult;
+	}
+
+	public void setLocalFiltering(boolean localFiltering) {
+		this.localFiltering = localFiltering;
+	}
+
+	public static void invalidateRepositoryCache(RepositoryPlugin repository) {
+		synchronized (repoPluginListResults) {
+			if (repository == null) {
+				repoPluginListResults.clear();
+			} else {
+				repoPluginListResults.remove(repository);
+			}
+		}
 	}
 
 	@Override
@@ -147,16 +189,20 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 	}
 
 	@Override
-	public void dispose() {}
+	public void dispose() {
+		disposed = true;
+		pendingResults.clear();
+		failedResults.clear();
+	}
 
 	@Override
 	public void inputChanged(Viewer viewer, Object oldInput, Object newInput) {
 		if (viewer instanceof StructuredViewer) {
 			this.structuredViewer = (StructuredViewer) viewer;
-
-			// only clear during subsequent updates
-			if (oldInput != null) {
-				repoPluginListResults.clear();
+			if (oldInput != null && oldInput != newInput) {
+				inputGeneration++;
+				pendingResults.clear();
+				failedResults.clear();
 			}
 		}
 	}
@@ -350,140 +396,215 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 	}
 
 	Object[] getRepositoryBundles(final RepositoryPlugin repoPlugin) {
-		Object[] result = null;
-
 		if (requirementFilter != null) {
 			if (repoPlugin instanceof Repository) {
-				result = searchR5Repository(repoPlugin, (Repository) repoPlugin);
+				return searchR5Repository(repoPlugin, (Repository) repoPlugin);
 			} else if (repoPlugin instanceof WorkspaceRepository) {
 				try {
 					EclipseWorkspaceRepository workspaceRepo = Central.getEclipseWorkspaceRepository();
-					result = searchR5Repository(repoPlugin, workspaceRepo);
+					return searchR5Repository(repoPlugin, workspaceRepo);
 				} catch (Exception e) {
 					logger.logError("Error querying workspace repository", e);
 				}
 			}
-			return result;
+			return null;
 		}
-
-		/*
-		 * We can't directly call repoPlugin.list() since we are on the UI
-		 * thread so the plan is to first check to see if we have cached the
-		 * list results already from a previous job, if so, return those results
-		 * directly If not, then we need to create a background job that will
-		 * call list() and once it is finished, we tell the Viewer to refresh
-		 * this node and the next time this method gets called the 'results'
-		 * will be available in the cache
-		 */
-		Map<String, Object[]> listResults = repoPluginListResults.computeIfAbsent(repoPlugin,
-			p -> createLRUMap(MAX_CACHED_FILTER_RESULTS));
-
-		result = listResults.get(wildcardFilter);
-
-		if (result == null) {
-			int generation = featureVisibilityGeneration;
-			Job job = new Job("Loading " + repoPlugin.getName() + " content...") {
-
-				@Override
-				protected IStatus run(IProgressMonitor monitor) {
-					IStatus status = Status.OK_STATUS;
-					Object[] jobresult;
-					List<String> bsns = null;
-
-					try {
-						bsns = repoPlugin.list(wildcardFilter);
-					} catch (Exception e) {
-						String message = MessageFormat.format("Error querying repository {0}.", repoPlugin.getName());
-						logger.logError(message, e);
-						status = new Status(IStatus.ERROR, Plugin.PLUGIN_ID, message, e);
-					}
-					if (bsns != null) {
-						Collections.sort(bsns);
-
-						// Collect features first
-						List<Object> items = new ArrayList<>();
-						Set<String> featureIds = new LinkedHashSet<>();
-
-						if (repoPlugin instanceof Repository repository) {
-							try {
-								for (Resource resource : getFeatureResources(repository))
-									featureIds.add(aQute.bnd.osgi.resource.ResourceUtils.getIdentity(resource));
-								if (showFeatures)
-									items.addAll(getRepositoryFeatures(repoPlugin, repository));
-							} catch (Exception e) {
-								logger.logError("Error querying features from repository " + repoPlugin.getName(), e);
-							}
-						}
-
-						// Collect bundles. Do not exclude bundles that share an
-						// ID with a
-						// feature (for example org.eclipse.platform can be both
-						// a bundle and
-						// a feature in p2 repositories).
-						for (String bsn : bsns) {
-							if (featureIds.contains(bsn)) {
-								try {
-									if (repoPlugin.versions(bsn).isEmpty())
-										continue;
-								} catch (Exception e) {
-									logger.logError("Error querying bundle versions for " + bsn, e);
-								}
-							}
-							items.add(new RepositoryBundle(repoPlugin, bsn));
-						}
-
-						jobresult = items.toArray();
-						if (generation != featureVisibilityGeneration)
-							return Status.CANCEL_STATUS;
-
-						Map<String, Object[]> listResults = repoPluginListResults.computeIfAbsent(repoPlugin,
-							p -> createLRUMap(MAX_CACHED_FILTER_RESULTS));
-						listResults.put(wildcardFilter, jobresult);
-
-						Display.getDefault()
-							.asyncExec(() -> {
-								if (!structuredViewer.getControl()
-									.isDisposed())
-									structuredViewer.refresh(repoPlugin, true);
-							});
-					}
-
-					return status;
-				}
-			};
-			job.schedule();
-
-			// wait 100 ms and see if the job will complete fast (likely already
-			// cached)
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {}
-
-			IStatus status = job.getResult();
-
-			if (status != null && status.isOK()) {
-				Map<String, Object[]> fastResults = repoPluginListResults.computeIfAbsent(repoPlugin,
-					p -> createLRUMap(MAX_CACHED_FILTER_RESULTS));
-				result = fastResults.get(wildcardFilter);
-			} else {
-				Object[] loading = new Object[] {
-					new LoadingContentElement()
-				};
-
-				listResults.put(wildcardFilter, loading);
-				result = loading;
+		if (localFiltering) {
+			Object[] contents = getRepositoryListResults(repoPlugin).get(LOCAL_CONTENT_CACHE_KEY);
+			if (contents != null) {
+				return filterLocalRepositoryContents(contents);
 			}
+			return loadRepositoryBundles(repoPlugin, null, null, true, LOCAL_CONTENT_CACHE_KEY);
 		}
-
-		return result;
+		String filter = wildcardFilter;
+		boolean includeFeatures = showFeatures;
+		String cacheKey = cacheKey(filter, includeFeatures);
+		Map<String, Object[]> listResults = getRepositoryListResults(repoPlugin);
+		Object[] contents = listResults.get(cacheKey);
+		if (contents != null) {
+			return contents;
+		}
+		return loadRepositoryBundles(repoPlugin, filter, wildcardGlob, includeFeatures, cacheKey);
 	}
 
-	List<RepositoryFeatureResource> getRepositoryFeatures(RepositoryPlugin plugin, Repository repository) {
-		if (!showFeatures)
+	private Object[] loadRepositoryBundles(RepositoryPlugin repoPlugin, String filter, Glob filterGlob,
+		boolean includeFeatures, String cacheKey) {
+		Object[] error = getLoadState(failedResults, repoPlugin, cacheKey);
+		if (error != null) {
+			return error;
+		}
+		Object[] pending = getLoadState(pendingResults, repoPlugin, cacheKey);
+		if (pending != null) {
+			return pending;
+		}
+
+		Object[] loading = new Object[] {
+			new LoadingContentElement(repoPlugin.getName())
+		};
+		setLoadState(pendingResults, repoPlugin, cacheKey, loading);
+		Map<String, Object[]> resultMap = getRepositoryListResults(repoPlugin);
+		AtomicBoolean loadingShown = new AtomicBoolean();
+		long generation = inputGeneration;
+		Job job = new Job("Loading " + repoPlugin.getName() + " content...") {
+			@Override
+			protected IStatus run(IProgressMonitor monitor) {
+				List<String> bsns;
+				try {
+					bsns = repoPlugin.list(filter);
+				} catch (Exception e) {
+					String message = MessageFormat.format("Error querying repository {0}.", repoPlugin.getName());
+					logger.logError(message, e);
+					Display.getDefault()
+						.asyncExec(() -> finishRepositoryLoad(repoPlugin, cacheKey, e.getMessage(), generation,
+							loadingShown.get()));
+					return new Status(IStatus.ERROR, Plugin.PLUGIN_ID, message, e);
+				}
+				if (bsns == null) {
+					Display.getDefault()
+						.asyncExec(() -> finishRepositoryLoad(repoPlugin, cacheKey, "No bundle list returned", generation,
+							loadingShown.get()));
+					return new Status(IStatus.ERROR, Plugin.PLUGIN_ID, "No bundle list returned");
+				}
+				Collections.sort(bsns);
+				List<Object> items = new ArrayList<>();
+				Set<String> featureIds = new LinkedHashSet<>();
+				if (repoPlugin instanceof Repository repository) {
+					try {
+						for (Resource resource : getFeatureResources(repository)) {
+							featureIds.add(aQute.bnd.osgi.resource.ResourceUtils.getIdentity(resource));
+						}
+						items.addAll(getRepositoryFeatures(repoPlugin, repository, filter, filterGlob, includeFeatures));
+					} catch (Exception e) {
+						logger.logError("Error querying features from repository " + repoPlugin.getName(), e);
+					}
+				}
+			for (String bsn : bsns) {
+				if (featureIds.contains(bsn)) {
+					try {
+						if (repoPlugin.versions(bsn).isEmpty()) {
+							continue;
+						}
+					} catch (Exception e) {
+						logger.logError("Error querying bundle versions for " + bsn, e);
+					}
+				}
+				items.add(new RepositoryBundle(repoPlugin, bsn));
+			}
+
+			boolean published;
+			synchronized (repoPluginListResults) {
+				published = repoPluginListResults.get(repoPlugin) == resultMap;
+				if (published) {
+					resultMap.put(cacheKey, items.toArray());
+				}
+			}
+			Display.getDefault()
+				.asyncExec(() -> finishRepositoryLoad(repoPlugin, cacheKey,
+					null, generation, loadingShown.get()));
+			return published ? Status.OK_STATUS : Status.CANCEL_STATUS;
+		}
+		};
+		job.schedule();
+		if (waitForFastResult) {
+			try {
+				job.join(100, null);
+			} catch (InterruptedException e) {
+				Thread.currentThread()
+					.interrupt();
+			} catch (OperationCanceledException e) {
+				// Keep the loading row visible.
+			}
+			Object[] loaded = getRepositoryListResults(repoPlugin).get(cacheKey);
+			if (loaded != null) {
+				removeLoadState(pendingResults, repoPlugin, cacheKey);
+				return localFiltering && LOCAL_CONTENT_CACHE_KEY.equals(cacheKey)
+					? filterLocalRepositoryContents(loaded)
+					: loaded;
+			}
+		}
+		loadingShown.set(true);
+		return loading;
+	}
+
+	private void finishRepositoryLoad(RepositoryPlugin repoPlugin, String cacheKey, String error, long generation,
+		boolean refresh) {
+		if (disposed || generation != inputGeneration) {
+			return;
+		}
+		removeLoadState(pendingResults, repoPlugin, cacheKey);
+		if (error == null) {
+			removeLoadState(failedResults, repoPlugin, cacheKey);
+		} else {
+			setLoadState(failedResults, repoPlugin, cacheKey, new Object[] {
+				LoadingContentElement.failure(repoPlugin.getName(), error)
+			});
+		}
+		if (!refresh || structuredViewer == null || structuredViewer.getControl()
+			.isDisposed()) {
+			return;
+		}
+		if (showRepos) {
+			structuredViewer.refresh(repoPlugin, true);
+		} else {
+			structuredViewer.refresh();
+		}
+	}
+
+	private Object[] filterLocalRepositoryContents(Object[] contents) {
+		List<Object> visible = new ArrayList<>(contents.length);
+		for (Object element : contents) {
+			if (!showFeatures && (element instanceof RepositoryFeatureResource || element instanceof RepositoryFeature)) {
+				continue;
+			}
+			String name = null;
+			if (element instanceof RepositoryBundle bundle) {
+				name = bundle.getBsn();
+			} else if (element instanceof RepositoryFeatureResource feature) {
+				name = feature.getId();
+			} else if (element instanceof RepositoryFeature feature) {
+				name = feature.getBsn();
+			}
+			if (wildcardGlob == null || (name != null && wildcardGlob.matches(name))) {
+				visible.add(element);
+			}
+		}
+		return visible.toArray();
+	}
+
+	private static Object[] getLoadState(Map<RepositoryPlugin, Map<String, Object[]>> states, RepositoryPlugin repo,
+		String key) {
+		Map<String, Object[]> repoStates = states.get(repo);
+		return repoStates == null ? null : repoStates.get(key);
+	}
+
+	private static void setLoadState(Map<RepositoryPlugin, Map<String, Object[]>> states, RepositoryPlugin repo,
+		String key, Object[] state) {
+		states.computeIfAbsent(repo, ignored -> new HashMap<>())
+			.put(key, state);
+	}
+
+	private static void removeLoadState(Map<RepositoryPlugin, Map<String, Object[]>> states, RepositoryPlugin repo,
+		String key) {
+		Map<String, Object[]> repoStates = states.get(repo);
+		if (repoStates != null) {
+			repoStates.remove(key);
+			if (repoStates.isEmpty()) {
+				states.remove(repo);
+			}
+		}
+	}
+
+	private static String cacheKey(String filter, boolean showFeatures) {
+		return (showFeatures ? "features:" : "bundles:") + (filter == null ? "" : filter);
+	}
+
+	List<RepositoryFeatureResource> getRepositoryFeatures(RepositoryPlugin plugin, Repository repository,
+		String filter, Glob filterGlob, boolean includeFeatures) {
+		if (!includeFeatures)
 			return List.of();
 		return getFeatureResources(repository).stream()
 			.map(resource -> new RepositoryFeatureResource(plugin, resource))
-			.filter(item -> wildcardFilter == null || matchesWildcard(item.getId(), wildcardFilter))
+			.filter(item -> filter == null || matchesWildcard(item.getId(), filter, filterGlob))
 			.sorted(Comparator.comparing(RepositoryFeatureResource::getId, String.CASE_INSENSITIVE_ORDER)
 				.thenComparing(item -> Version.parseVersion(item.getVersion())))
 			.toList();
@@ -494,9 +615,18 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 			.addDirective("filter", "(" + IdentityNamespace.CAPABILITY_TYPE_ATTRIBUTE + "=" + Feature.TYPE + ")")
 			.buildSyntheticRequirement();
 		return repository.findProviders(Collections.singleton(requirement))
-			.getOrDefault(requirement, Collections.emptyList()).stream()
-			.map(Capability::getResource).distinct()
+			.getOrDefault(requirement, Collections.emptyList())
+			.stream()
+			.map(Capability::getResource)
+			.distinct()
 			.toList();
+	}
+
+	private static Map<String, Object[]> getRepositoryListResults(RepositoryPlugin repoPlugin) {
+		synchronized (repoPluginListResults) {
+			return repoPluginListResults.computeIfAbsent(repoPlugin,
+				p -> createLRUMap(MAX_CACHED_FILTER_RESULTS));
+		}
 	}
 
 	Object[] searchR5Repository(RepositoryPlugin repoPlugin, Repository osgiRepo) {
@@ -541,33 +671,21 @@ public class RepositoryTreeContentProvider implements ITreeContentProvider {
 
 	// Define a LRU-like inner map (max n entries)
 	private static Map<String, Object[]> createLRUMap(int n) {
-		return new LinkedHashMap<String, Object[]>(n + 1, 1.0f, true) {
+		return Collections.synchronizedMap(new LinkedHashMap<String, Object[]>(n + 1, 1.0f, true) {
 			private static final long serialVersionUID = 1L;
 
 			@Override
 			protected boolean removeEldestEntry(Map.Entry<String, Object[]> eldest) {
-				// Auto-remove oldest when size > n
-				// but always keep the 'null' key which is '*'
-				return size() > n && eldest.getKey() != null;
+				return size() > n;
 			}
-		};
+		});
 	}
 
-	/**
-	 * Simple wildcard matcher for feature ID filtering. Uses a cached
-	 * {@link aQute.libg.glob.Glob} instance for case-insensitive wildcard
-	 * matching.
-	 *
-	 * @param str the string to match (e.g., feature ID)
-	 * @param wildcardPattern the pattern with wildcards (e.g., "*feature*")
-	 * @return true if the string matches the pattern
-	 */
-	private boolean matchesWildcard(String str, String wildcardPattern) {
+	private static boolean matchesWildcard(String str, String wildcardPattern, Glob capturedGlob) {
 		if (str == null || wildcardPattern == null) {
 			return false;
 		}
-		Glob glob = wildcardPattern.equals(wildcardFilter) && wildcardGlob != null ? wildcardGlob
-			: new Glob(wildcardPattern, Pattern.CASE_INSENSITIVE);
+		Glob glob = capturedGlob == null ? new Glob(wildcardPattern, Pattern.CASE_INSENSITIVE) : capturedGlob;
 		return glob.matches(str);
 	}
 }
